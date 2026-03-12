@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 import { FileRecord } from '../files/file.entity';
 import { LinkRecord } from './link.entity';
+import { Vote } from './vote.entity';
 
 @Entity()
 export class Event {
@@ -30,4 +31,7 @@ export class Event {
 
     @OneToMany(() => LinkRecord, (link) => link.event)
     links: LinkRecord[];
+
+    @OneToMany('Vote', (vote: any) => vote.event)
+    votes: any[];
 }

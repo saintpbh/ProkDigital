@@ -15,8 +15,22 @@ export interface LinkData {
     published_at: string;
 }
 
+export interface VoteData {
+    id: number;
+    question: string;
+    type: string;
+    status: string;
+    show_results: boolean;
+    options?: any[];
+    results?: any;
+    voted_count?: number;
+}
+
 interface SSEOptions {
     onAnnouncement?: (message: string) => void;
+    onVoteStatusChange?: (vote: VoteData) => void;
+    onVoteCountUpdate?: (data: { id: number, count: number }) => void;
+    onVoteResults?: (data: { id: number, results: any }) => void;
 }
 
 export const useSSE = (url: string | null, options?: SSEOptions) => {
@@ -61,6 +75,12 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                         icon: '/favicon.ico' // 아이콘이 있다면 설정
                     });
                 }
+            } else if (data.event === 'vote_status_changed') {
+                if (options?.onVoteStatusChange) options.onVoteStatusChange(data.data);
+            } else if (data.event === 'vote_cast_count') {
+                if (options?.onVoteCountUpdate) options.onVoteCountUpdate(data.data);
+            } else if (data.event === 'vote_results_published') {
+                if (options?.onVoteResults) options.onVoteResults(data.data);
             } else if (data.event === 'connection_count') {
                 setConnectionCount(data.count);
             }

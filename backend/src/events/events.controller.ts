@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, Query } from '@nestjs/common';
 import { EventsService } from './events.service';
 
 @Controller('api/events')
@@ -46,10 +46,11 @@ export class EventsController {
     }
 
     @Get(':id/qr')
-    async getQrCode(@Param('id') id: string) {
+    async getQrCode(@Param('id') id: string, @Query('origin') origin?: string) {
         const event = await this.eventsService.findOne(+id);
         const QRCode = require('qrcode');
-        const joinUrl = `http://localhost:5174/join/${event.token}`;
+        const baseOrigin = origin || 'http://localhost:5173';
+        const joinUrl = `${baseOrigin}/join/${event.token}`;
         const qrCodeDataUrl = await QRCode.toDataURL(joinUrl);
         return { qrCode: qrCodeDataUrl, joinUrl };
     }

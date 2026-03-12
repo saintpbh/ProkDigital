@@ -12,9 +12,9 @@ export default function Admin() {
     const [activeEvent, setActiveEvent] = useState<any>(null);
     const [allFiles, setAllFiles] = useState<any[]>([]);
     const [allLinks, setAllLinks] = useState<any[]>([]);
+    const [votes, setVotes] = useState<any[]>([]);
     const [qrInfo, setQrInfo] = useState<any>(null);
     const [announcement, setAnnouncement] = useState('');
-    const [deleteConfirmed, setDeleteConfirmed] = useState(false);
     const { connectionCount } = useSSE(`${API_BASE_URL}/api/stream`);
 
     const fetchEvents = () => {
@@ -30,10 +30,14 @@ export default function Admin() {
                 setAllFiles(data.files || []);
                 setAllLinks(data.links || []);
             });
+        fetch(`${API_BASE_URL}/api/votes?eventId=${eventId}`)
+            .then(res => res.json())
+            .then(data => setVotes(Array.isArray(data) ? data : []))
+            .catch(() => setVotes([]));
     };
 
     const fetchQrCode = (eventId: number) => {
-        fetch(`${API_BASE_URL}/api/events/${eventId}/qr`)
+        fetch(`${API_BASE_URL}/api/events/${eventId}/qr?origin=${encodeURIComponent(window.location.origin)}`)
             .then(res => res.json())
             .then(data => setQrInfo(data));
     };
@@ -121,6 +125,49 @@ export default function Admin() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: newTitle }),
         });
+        fetchEventData(activeEvent.id);
+    };
+
+    const addVote = async () => {
+        const question = prompt('투표 안건을 입력하세요');
+        if (!question) return;
+        const type = confirm('다지선다 투표입니까? (취소 시 가/부 투표)') ? 'MULTIPLE' : 'YN';
+        let options: string[] = [];
+        if (type === 'MULTIPLE') {
+            const optStr = prompt('선택지들을 콤마(,)로 구분하여 입력하세요 (예: 찬성,반대,기권)');
+            if (!optStr) return;
+            options = optStr.split(',').map(s => s.trim());
+        }
+
+        await fetch(`${API_BASE_URL}/api/votes?eventId=${activeEvent.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, type, options }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const updateVoteStatus = async (id: number, status: string) => {
+        await fetch(`${API_BASE_URL}/api/votes/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const toggleVoteResults = async (id: number, show: boolean) => {
+        await fetch(`${API_BASE_URL}/api/votes/${id}/results`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ show }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const deleteVote = async (id: number) => {
+        if (!confirm('투표를 삭제할까요?')) return;
+        await fetch(`${API_BASE_URL}/api/votes/${id}`, { method: 'DELETE' });
         fetchEventData(activeEvent.id);
     };
 
@@ -246,6 +293,51 @@ export default function Admin() {
                 </aside>
 
                 <main className="mgmt-content">
+                    <section className="content-area">
+                        <div className="area-header">
+                            <h3>🗳️ 투표 안건 관리</h3>
+                            <button className="btn-vote" onClick={addVote}>+ 새 투표 생성</button>
+                        </div>
+                        <div className="management-list">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>안건</th>
+                                        <th>유형</th>
+                                        <th>상태</th>
+                                        <th>제어</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {votes.map(v => (
+                                        <tr key={v.id}>
+                                            <td>{v.question}</td>
+                                            <td>{v.type === 'YN' ? '가/부' : '다지선다'}</td>
+                                            <td>
+                                                <span className={`tag ${v.status === 'OPEN' ? 'on' : v.status === 'CLOSED' ? 'off' : ''}`}>
+                                                    {v.status === 'WAITING' ? '대기' : v.status === 'OPEN' ? '진행중' : '종료'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="btn-group">
+                                                    {v.status === 'WAITING' && <button onClick={() => updateVoteStatus(v.id, 'OPEN')}>투표 개시</button>}
+                                                    {v.status === 'OPEN' && <button onClick={() => updateVoteStatus(v.id, 'CLOSED')}>투표 종료</button>}
+                                                    {v.status === 'CLOSED' && (
+                                                        <button onClick={() => toggleVoteResults(v.id, !v.show_results)}>
+                                                            {v.show_results ? '결과 숨김' : '결과 발표'}
+                                                        </button>
+                                                    )}
+                                                    <button className="del" onClick={() => deleteVote(v.id)}>삭제</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {votes.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: '#888' }}>생성된 투표가 없습니다.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
                     <section className="content-area">
                         <div className="area-header">
                             <h3>파일 및 문서 관리</h3>

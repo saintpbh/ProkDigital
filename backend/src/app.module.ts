@@ -9,13 +9,14 @@ import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './events/events.module';
 import { Event } from './events/event.entity';
 import { LinkRecord } from './events/link.entity';
+import { Vote, VoteOption, VoteRecord } from './events/vote.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: 'db.sqlite',
-      entities: [FileRecord, Event, LinkRecord],
+      entities: [FileRecord, Event, LinkRecord, Vote, VoteOption, VoteRecord],
       synchronize: true,
     }),
     SseModule,
