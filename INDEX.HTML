@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제110회 디지털 총회</title>
+    <style>
+        :root {
+            --primary: #1a237e;
+            --bg: #f5f7fa;
+            --accent: #ff9800;
+        }
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            padding-bottom: 70px;
+        }
+
+        /* 헤더: 현재 진행 상태 */
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .current-agenda {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        /* 파일 리스트 */
+        .container {
+            padding: 15px;
+        }
+
+        .file-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            animation: slideIn 0.5s ease;
+            /* '짠' 하고 나타나는 효과 */
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .file-info .title {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .file-info .meta {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .badge {
+            background: var(--accent);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            vertical-align: middle;
+            margin-left: 5px;
+        }
+
+        .btn-view {
+            background: #e8eaf6;
+            color: var(--primary);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* 하단 탭 바 */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: white;
+            display: flex;
+            border-top: 1px solid #ddd;
+            height: 60px;
+        }
+
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div style="font-size: 1.2em; font-weight: bold;">제110회 정기총회</div>
+        <div class="current-agenda">📢 현재 <b>제3호 안건</b> 심의 중입니다.</div>
+    </div>
+
+    <div class="container">
+        <div class="file-card">
+            <div class="file-info">
+                <div class="title">제3호 안건 심의 자료<span class="badge">NEW</span></div>
+                <div class="meta">PDF · 1.2MB · 14:02 공개</div>
+            </div>
+            <button class="btn-view">열람</button>
+        </div>
+
+        <div class="file-card" style="border-left: 5px solid #4caf50;">
+            <div class="file-info">
+                <div class="title">개회 선언 및 절차 보고</div>
+                <div class="meta">PDF · 850KB · 열람완료</div>
+            </div>
+            <button class="btn-view" style="background: #f0f0f0;">다시보기</button>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active">안건지</div>
+        <div class="nav-item">실시간 투표</div>
+        <div class="nav-item">전체 일정</div>
+        <div class="nav-item">내 정보</div>
+    </nav>
+</body>
+
+</html>

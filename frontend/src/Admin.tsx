@@ -1,0 +1,372 @@
+import { useState, useEffect } from 'react';
+import { useSSE } from './hooks/useSSE';
+import FileUploader from './components/FileUploader';
+
+const API_BASE_URL = 'http://localhost:3000';
+
+type ViewMode = 'dashboard' | 'management';
+
+export default function Admin() {
+    const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+    const [events, setEvents] = useState<any[]>([]);
+    const [activeEvent, setActiveEvent] = useState<any>(null);
+    const [allFiles, setAllFiles] = useState<any[]>([]);
+    const [allLinks, setAllLinks] = useState<any[]>([]);
+    const [qrInfo, setQrInfo] = useState<any>(null);
+    const [announcement, setAnnouncement] = useState('');
+    const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+    const { connectionCount } = useSSE(`${API_BASE_URL}/api/stream`);
+
+    const fetchEvents = () => {
+        fetch(`${API_BASE_URL}/api/events`)
+            .then(res => res.json())
+            .then(data => setEvents(data));
+    };
+
+    const fetchEventData = (eventId: number) => {
+        fetch(`${API_BASE_URL}/api/events/${eventId}`)
+            .then(res => res.json())
+            .then(data => {
+                setAllFiles(data.files || []);
+                setAllLinks(data.links || []);
+            });
+    };
+
+    const fetchQrCode = (eventId: number) => {
+        fetch(`${API_BASE_URL}/api/events/${eventId}/qr`)
+            .then(res => res.json())
+            .then(data => setQrInfo(data));
+    };
+
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
+    useEffect(() => {
+        if (activeEvent && viewMode === 'management') {
+            fetchEventData(activeEvent.id);
+            fetchQrCode(activeEvent.id);
+        }
+    }, [activeEvent, viewMode]);
+
+    const handleCreateEvent = async () => {
+        const name = prompt('새 행사 이름을 입력하세요');
+        if (!name) return;
+        const res = await fetch(`${API_BASE_URL}/api/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, passcode: '1234' }),
+        });
+        const newEvent = await res.json();
+        setEvents([newEvent, ...events]);
+        setActiveEvent(newEvent);
+        setViewMode('management');
+    };
+
+    const handleUpdateEvent = async (id: number, data: any) => {
+        await fetch(`${API_BASE_URL}/api/events/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        fetchEvents();
+    };
+
+    const handleDeleteEvent = async (id: number) => {
+        if (!window.confirm('정말로 이 행사를 영구적으로 삭제하시겠습니까? 관련 된 모든 데이터가 사라집니다.')) return;
+        await fetch(`${API_BASE_URL}/api/events/${id}`, { method: 'DELETE' });
+        setViewMode('dashboard');
+        setActiveEvent(null);
+        fetchEvents();
+    };
+
+    const handleSendAnnouncement = async () => {
+        if (!activeEvent || !announcement) return;
+        await fetch(`${API_BASE_URL}/api/events/${activeEvent.id}/announce`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: announcement }),
+        });
+        alert('공지가 발송되었습니다.');
+        setAnnouncement('');
+    };
+
+    const toggleFile = async (id: number) => {
+        await fetch(`${API_BASE_URL}/api/files/${id}/toggle`, { method: 'PATCH' });
+        fetchEventData(activeEvent.id);
+    };
+
+    const renameFile = async (id: number, oldTitle: string) => {
+        const newTitle = prompt('새 파일 이름을 입력하세요', oldTitle);
+        if (!newTitle || newTitle === oldTitle) return;
+        await fetch(`${API_BASE_URL}/api/files/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const deleteFile = async (id: number) => {
+        if (!window.confirm('정말로 삭제하시겠습니까?')) return;
+        await fetch(`${API_BASE_URL}/api/files/${id}`, { method: 'DELETE' });
+        fetchEventData(activeEvent.id);
+    };
+
+    const renameLink = async (id: number, oldTitle: string) => {
+        const newTitle = prompt('새 링크 이름을 입력하세요', oldTitle);
+        if (!newTitle || newTitle === oldTitle) return;
+        await fetch(`${API_BASE_URL}/api/events/links/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const addLink = async () => {
+        const title = prompt('링크 제목을 입력하세요');
+        const url = prompt('URL 주소를 입력하세요');
+        if (!title || !url) return;
+        await fetch(`${API_BASE_URL}/api/events/${activeEvent.id}/links`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, url }),
+        });
+        fetchEventData(activeEvent.id);
+    };
+
+    const toggleLink = async (id: number) => {
+        await fetch(`${API_BASE_URL}/api/events/links/${id}/toggle`, { method: 'PATCH' });
+        fetchEventData(activeEvent.id);
+    };
+
+    // Dashboard View (Level 1)
+    if (viewMode === 'dashboard') {
+        const recentEvents = events.slice(0, 3);
+        const pastEvents = events.slice(3);
+
+        return (
+            <div className="admin-dashboard">
+                <header className="admin-header">
+                    <div>
+                        <h1>디지털 총회 관제 센터</h1>
+                        <p>반갑습니다, 관리자님. 운영할 행사를 선택하거나 새로 추가해 주세요.</p>
+                    </div>
+                    <div className="stats-badge">
+                        현재 접속: <b>{connectionCount}명</b>
+                    </div>
+                </header>
+
+                <main className="dashboard-content">
+                    <section className="event-section">
+                        <div className="section-header">
+                            <h2>최근 행사</h2>
+                            <button className="btn-add" onClick={handleCreateEvent}>+ 새 행사 추가</button>
+                        </div>
+                        <div className="event-grid">
+                            {recentEvents.map(ev => (
+                                <div key={ev.id} className="event-card">
+                                    <div className="card-main" onClick={() => { setActiveEvent(ev); setViewMode('management'); }}>
+                                        <div className="event-tag">RECENT</div>
+                                        <h3>{ev.name}</h3>
+                                        <p>{new Date(ev.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                    <div className="card-actions">
+                                        <button title="제목 변경" onClick={() => {
+                                            const n = prompt('새 행사 이름을 입력하세요', ev.name);
+                                            if (n && n !== ev.name) handleUpdateEvent(ev.id, { name: n });
+                                        }}>✏️</button>
+                                        <button title="QR 코드" onClick={() => { fetchQrCode(ev.id); alert('QR 코드가 하단에 생성됩니다(기능준비중)'); }}>📱</button>
+                                        <button title="비밀번호 변경" onClick={() => {
+                                            const p = prompt('새 암호를 입력하세요', ev.passcode);
+                                            if (p) handleUpdateEvent(ev.id, { passcode: p });
+                                        }}>🔑</button>
+                                        <button title="삭제" className="btn-card-del" onClick={() => handleDeleteEvent(ev.id)}>🗑️</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {pastEvents.length > 0 && (
+                        <section className="event-section">
+                            <h2>이전 행사들</h2>
+                            <div className="event-grid past">
+                                {pastEvents.map(ev => (
+                                    <div key={ev.id} className="event-card mini" onClick={() => { setActiveEvent(ev); setViewMode('management'); }}>
+                                        <h3>{ev.name}</h3>
+                                        <button className="btn-past-del" onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }}>×</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </main>
+                <style>{dashboardStyles}</style>
+            </div>
+        );
+    }
+
+    // Management View (Level 2)
+    return (
+        <div className="admin-management">
+            <header className="admin-header-nav">
+                <button className="btn-back" onClick={() => setViewMode('dashboard')}>← 대시보드로</button>
+                <h1>{activeEvent.name} <small>관리 모드</small></h1>
+                <div className="live-badge">LIVE</div>
+            </header>
+
+            <div className="management-grid">
+                <aside className="mgmt-sidebar">
+                    <section className="announcement-tool">
+                        <h3>📣 실시간 공지 발송</h3>
+                        <textarea
+                            placeholder="대의원 화면에 즉시 표시될 내용을 입력하세요..."
+                            value={announcement}
+                            onChange={(e) => setAnnouncement(e.target.value)}
+                        />
+                        <button className="btn-send" onClick={handleSendAnnouncement}>공지 즉시 발송</button>
+                    </section>
+
+                    {qrInfo && (
+                        <section className="share-tool">
+                            <h3>🔗 접속 및 공유</h3>
+                            <div className="qr-container">
+                                <img src={qrInfo.qrCode} alt="QR" />
+                                <button className="btn-copy" onClick={() => { navigator.clipboard.writeText(qrInfo.joinUrl); alert('주소가 복사되었습니다.'); }}>주소 복사</button>
+                            </div>
+                            <div className="test-url">
+                                <label>테스트 URL</label>
+                                <input readOnly value={qrInfo.joinUrl} />
+                                <button onClick={() => window.open(qrInfo.joinUrl, '_blank')}>열기</button>
+                            </div>
+                        </section>
+                    )}
+                </aside>
+
+                <main className="mgmt-content">
+                    <section className="content-area">
+                        <div className="area-header">
+                            <h3>파일 및 문서 관리</h3>
+                            <button className="btn-link" onClick={addLink}>+ 외부 링크 추가</button>
+                        </div>
+                        <FileUploader eventId={activeEvent.id} onUploadSuccess={() => fetchEventData(activeEvent.id)} />
+
+                        <div className="management-list">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>제목</th>
+                                        <th>구분</th>
+                                        <th>상태</th>
+                                        <th>제어</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allFiles.map(f => (
+                                        <tr key={f.id}>
+                                            <td>{f.title}</td>
+                                            <td>PDF</td>
+                                            <td><span className={`tag ${f.is_public ? 'on' : 'off'}`}>{f.is_public ? '공유중' : '중단'}</span></td>
+                                            <td>
+                                                <button onClick={() => renameFile(f.id, f.title)}>✏️</button>
+                                                <button onClick={() => toggleFile(f.id)}>{f.is_public ? '중지' : '공개'}</button>
+                                                <button className="del" onClick={() => deleteFile(f.id)}>삭제</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {allLinks.map(l => (
+                                        <tr key={l.id}>
+                                            <td>{l.title}</td>
+                                            <td>LINK</td>
+                                            <td><span className={`tag ${l.is_public ? 'on' : 'off'}`}>{l.is_public ? '공유중' : '중단'}</span></td>
+                                            <td>
+                                                <button onClick={() => renameLink(l.id, l.title)}>✏️</button>
+                                                <button onClick={() => toggleLink(l.id)}>{l.is_public ? '중지' : '공개'}</button>
+                                                <button className="del" onClick={() => { if (confirm('삭제할까요?')) fetch(`${API_BASE_URL}/api/events/links/${l.id}`, { method: 'DELETE' }).then(() => fetchEventData(activeEvent.id)) }}>삭제</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </main>
+            </div>
+            <style>{managementStyles}</style>
+        </div>
+    );
+}
+
+const dashboardStyles = `
+    .admin-dashboard { padding: 40px; max-width: 1200px; margin: 0 auto; color: #333; }
+    .admin-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 50px; }
+    .admin-header h1 { font-size: 2rem; margin: 0; color: #1a237e; }
+    .admin-header p { color: #666; margin: 5px 0 0; }
+    .stats-badge { background: #e8eaf6; padding: 10px 20px; border-radius: 30px; font-size: 0.9rem; color: #1a237e; }
+
+    .event-section { margin-bottom: 40px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .btn-add { background: #1a237e; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+    .event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .event-card { background: white; border-radius: 15px; border: 1px solid #eee; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.2s; }
+    .event-card:hover { transform: translateY(-5px); }
+    .card-main { padding: 25px; cursor: pointer; }
+    .event-tag { font-size: 10px; font-weight: 800; color: #1a237e; background: #e8eaf6; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 15px; }
+    .event-card h3 { margin: 0 0 10px; font-size: 1.25rem; }
+    .event-card p { margin: 0; color: #888; font-size: 0.85rem; }
+    
+    .card-actions { background: #f8f9fa; padding: 12px 20px; display: flex; gap: 10px; border-top: 1px solid #f0f0f0; }
+    .card-actions button { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 1.1rem; }
+    .btn-card-del:hover { background: #ffebee; border-color: #ffcdd2; }
+
+    .event-grid.past { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .event-card.mini { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .event-card.mini h3 { font-size: 1rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-past-del { background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
+    .btn-past-del:hover { color: #f44336; }
+`;
+
+const managementStyles = `
+    .admin-management { padding: 0; height: 100vh; display: flex; flex-direction: column; background: #f5f7fa; }
+    .admin-header-nav { background: white; padding: 15px 30px; display: flex; align-items: center; border-bottom: 1px solid #e1e4e8; gap: 20px; }
+    .btn-back { background: none; border: 1px solid #ddd; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+    .admin-header-nav h1 { font-size: 1.3rem; margin: 0; flex: 1; }
+    .admin-header-nav h1 small { color: #888; font-weight: normal; margin-left:10px; }
+    .live-badge { background: #f44336; color: white; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    .management-grid { display: grid; grid-template-columns: 320px 1fr; flex: 1; overflow: hidden; }
+    .mgmt-sidebar { background: white; border-right: 1px solid #e1e4e8; padding: 25px; overflow-y: auto; }
+    .mgmt-content { padding: 30px; overflow-y: auto; }
+
+    .announcement-tool h3, .share-tool h3, .content-area h3 { font-size: 1rem; margin: 0 0 15px; display: flex; align-items: center; gap: 8px; }
+    .announcement-tool textarea { width: 100%; height: 120px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box; }
+    .btn-send { width: 100%; background: #1a237e; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+    .qr-container { text-align: center; background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
+    .qr-container img { width: 160px; background: white; padding: 10px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 10px; }
+    .btn-copy { display: block; width: 100%; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; }
+
+    .test-url label { font-size: 0.8rem; color: #666; display: block; margin-bottom: 5px; }
+    .test-url { display: flex; flex-direction: column; gap: 5px; }
+    .test-url input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.8rem; background: #f8f9fa; }
+    .test-url button { padding: 8px; background: #333; color: white; border: none; border-radius: 6px; cursor: pointer; }
+
+    .area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .btn-link { background: #4caf50; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+    .management-list { background: white; border-radius: 12px; border: 1px solid #eee; overflow: hidden; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 15px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    td { padding: 15px; border-bottom: 1px solid #f0f0f0; }
+    .tag { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .tag.on { background: #e8f5e9; color: #2e7d32; }
+    .tag.off { background: #f5f5f5; color: #999; }
+    
+    td button { background: white; border: 1px solid #ddd; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+    td button.del { color: #f44336; border-color: #ffcdd2; }
+    td button.del:hover { background: #ffebee; }
+`;

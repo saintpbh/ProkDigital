@@ -1,0 +1,6 @@
+export interface IStorageProvider {
+    uploadFile(file: Express.Multer.File): Promise<{ url: string; filename: string }>;
+    deleteFile(url: string): Promise<void>;
+}
+
+export const STORAGE_PROVIDER = 'STORAGE_PROVIDER';
