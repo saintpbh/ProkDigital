@@ -15,6 +15,8 @@ function App() {
   const [voteResults, setVoteResults] = useState<any | null>(null);
   const [hasVoted, setHasVoted] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'agenda' | 'vote' | 'schedule' | 'info'>('agenda');
+  const [announcementHistory, setAnnouncementHistory] = useState<{ id: string, message: string, timestamp: string }[]>([]);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
 
   const [voterId] = useState(() => {
     let id = localStorage.getItem('voterId');
@@ -30,6 +32,18 @@ function App() {
     {
       onAnnouncement: (msg: string) => {
         setAnnouncement(msg);
+        if (msg) {
+          const newAnnouncement = {
+            id: Date.now().toString(),
+            message: msg,
+            timestamp: new Date().toISOString()
+          };
+          setAnnouncementHistory(prev => {
+            const updated = [newAnnouncement, ...prev];
+            if (token) localStorage.setItem(`announcements_${token}`, JSON.stringify(updated));
+            return updated;
+          });
+        }
       },
       onVoteStatusChange: (v) => {
         console.log('Vote status changed via SSE:', v);
@@ -74,6 +88,15 @@ function App() {
           setEvent(data);
           if (data.current_announcement) {
             setAnnouncement(data.current_announcement);
+          }
+          // Load history from localStorage
+          const savedHistory = localStorage.getItem(`announcements_${eventToken}`);
+          if (savedHistory) {
+            try {
+              setAnnouncementHistory(JSON.parse(savedHistory));
+            } catch (e) {
+              console.error('Failed to load announcement history', e);
+            }
           }
           // Fetch initial votes for this event
           fetch(`${API_BASE_URL}/api/votes?eventId=${data.id}`)
@@ -314,7 +337,49 @@ function App() {
         )}
 
         {activeTab === 'info' && (
-          <div className="empty-state">준비 중인 화면입니다.</div>
+          <section className="info-tab-content">
+            <h3>📢 공지사항 보관함</h3>
+            <p className="tab-desc">수신된 공지사항 기록입니다.</p>
+            
+            <div className="announcement-list">
+              {announcementHistory.length > 0 ? (
+                announcementHistory.map((item) => (
+                  <div key={item.id} className="announcement-item-card" onClick={() => setSelectedAnnouncement(item)}>
+                    <div className="item-header">
+                      <span className="item-icon">📢</span>
+                      <span className="item-time">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="item-body">
+                      {item.message.length > 40 ? item.message.substring(0, 40) + '...' : item.message}
+                    </div>
+                    <div className="item-footer">더보기 〉</div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">
+                  <div className="icon">📭</div>
+                  <p>아직 수신된 공지사항이 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Announcement Detail Overlay */}
+            {selectedAnnouncement && (
+              <div className="detail-overlay" onClick={() => setSelectedAnnouncement(null)}>
+                <div className="detail-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="detail-header">
+                    <h3>공지사항 상세</h3>
+                    <button className="btn-close" onClick={() => setSelectedAnnouncement(null)}>×</button>
+                  </div>
+                  <div className="detail-body">
+                    <div className="detail-time">발신 시간: {new Date(selectedAnnouncement.timestamp).toLocaleString()}</div>
+                    <div className="detail-message">{selectedAnnouncement.message}</div>
+                  </div>
+                  <button className="btn-confirm" onClick={() => setSelectedAnnouncement(null)}>확인</button>
+                </div>
+              </div>
+            )}
+          </section>
         )}
 
         {/* Voting Notification Popup (when not on vote tab) */}
@@ -476,6 +541,43 @@ function App() {
         .result-info { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; }
         .progress-bar { background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden; }
         .progress-fill { background: #1a237e; height: 100%; }
+
+        .info-tab-content { padding: 10px 0; text-align: left; }
+        .tab-desc { color: #888; font-size: 0.9rem; margin-bottom: 20px; text-align: center; }
+        .announcement-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 40px; }
+        .announcement-item-card { 
+          background: white; border-radius: 12px; padding: 15px; 
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee;
+          cursor: pointer; transition: transform 0.1s;
+        }
+        .announcement-item-card:active { transform: scale(0.98); background: #fafafa; }
+        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .item-icon { font-size: 1.2rem; }
+        .item-time { font-size: 0.8rem; color: #aaa; }
+        .item-body { font-size: 0.95rem; color: #333; line-height: 1.4; word-break: break-all; }
+        .item-footer { margin-top: 8px; font-size: 0.8rem; color: var(--primary); text-align: right; font-weight: bold; }
+
+        .detail-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px;
+        }
+        .detail-card {
+          background: white; width: 100%; max-width: 400px; border-radius: 20px; 
+          box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .detail-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .detail-header h3 { margin: 0; font-size: 1.1rem; color: #333; }
+        .btn-close { background: none; border: none; font-size: 1.5rem; color: #999; cursor: pointer; }
+        .detail-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+        .detail-time { font-size: 0.85rem; color: #888; margin-bottom: 15px; }
+        .detail-message { font-size: 1.05rem; color: #222; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+        .btn-confirm { 
+          width: calc(100% - 40px); margin: 0 20px 20px; background: var(--primary); 
+          color: white; border: none; padding: 14px; border-radius: 12px; 
+          font-weight: bold; cursor: pointer; font-size: 1rem;
+        }
       `}</style>
     </div>
   );
