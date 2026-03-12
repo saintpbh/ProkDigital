@@ -92,7 +92,7 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
 
         eventSource.onerror = (err) => {
             console.error('SSE Error:', err);
-            eventSource.close();
+            // eventSource.close(); // Don't close manually to allow automatic reconnection
         };
 
         return () => {

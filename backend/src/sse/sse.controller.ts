@@ -10,8 +10,8 @@ export class SseController {
     sse(): Observable<MessageEvent> {
         this.sseService.incrementConnections();
 
-        // Keep-alive signal every 15 seconds to prevent timeout
-        const keepAlive$ = interval(15000).pipe(
+        // Keep-alive signal every 10 seconds to prevent timeout
+        const keepAlive$ = interval(10000).pipe(
             map(() => ({ data: { event: 'keep-alive' } } as MessageEvent)),
         );
 
