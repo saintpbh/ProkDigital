@@ -1,6 +1,8 @@
 import { Injectable, MessageEvent } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class SseService {
@@ -8,7 +10,17 @@ export class SseService {
   private connectionCount = 0;
 
   sendEvent(event: any) {
-    console.log(`[SSE-SERVER] 📢 Broadcasting event: ${event.event} (Token: ${event.token || 'global'})`);
+    const logMsg = `[SSE-SERVER] 📢 ${new Date().toISOString()} | Event: ${event.event} | Token: ${event.token || 'global'} | Data: ${JSON.stringify(event.data)}\n`;
+    console.log(logMsg.trim());
+    
+    // Write to a persistent log file for debugging
+    try {
+        const logPath = path.join(process.cwd(), 'sse_broadcast.log');
+        fs.appendFileSync(logPath, logMsg);
+    } catch (e) {
+        console.error('Failed to write to SSE log file', e);
+    }
+
     this.events$.next(event);
   }
 

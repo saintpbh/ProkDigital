@@ -49,93 +49,126 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
             setConnectionStatus('disconnected');
             return;
         }
-        
-        setConnectionStatus('connecting');
-        const currentToken = new URL(url, window.location.origin).searchParams.get('token');
-        const eventSource = new EventSource(url, { withCredentials: true });
 
-        eventSource.onopen = () => {
-            setConnectionStatus('connected');
-            if (errorCount > 0) {
-                console.log('[SSE] 🔄 Reconnected! Triggering data refresh...');
-                window.dispatchEvent(new CustomEvent('sse-refresh-data'));
-            }
-            setErrorCount(0);
-            if (currentToken) console.log(`[SSE] ✅ Connection Open (Token: ${currentToken}, ReadyState: ${eventSource.readyState})`);
-        };
+        let isMounted = true;
+        const controller = new AbortController();
+        const rawToken = new URL(url, window.location.origin).searchParams.get('token');
+        // Sanitize token: remove trailing '?' or other punctuation and trim
+        const currentToken = rawToken ? rawToken.replace(/[?]+$/, '').trim() : null;
 
-        eventSource.onmessage = (event) => {
-            let data;
+        const connect = async () => {
+            setConnectionStatus('connecting');
             try {
-                data = JSON.parse(event.data);
-            } catch (e) {
-                console.error('[SSE] ❌ Failed to parse message data. RAW:', event.data);
-                return;
-            }
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/event-stream',
+                        'bypass-tunnel-reminder': 'true'
+                    },
+                    signal: controller.signal,
+                });
 
-            // Process keep-alive for visibility
-            if (data.event === 'keep-alive') {
-                // Heartbeat received
-                // console.log(`[SSE] 💓 Heartbeat (${new Date().toLocaleTimeString()})`);
-                return;
-            }
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                if (!response.body) throw new Error('Response body is null');
 
-            if (data.event === 'welcome') {
-                console.log(`[SSE] 🚀 Welcome: "${data.message}" (Padding: ${data.padding?.length || 0} bytes)`);
-                return;
-            }
+                setConnectionStatus('connected');
+                if (errorCount > 0) {
+                    console.log('[SSE] 🔄 Reconnected! Triggering data refresh...');
+                    window.dispatchEvent(new CustomEvent('sse-refresh-data'));
+                }
+                setErrorCount(0);
+                if (currentToken) console.log(`[SSE] ✅ Stream Open (Token: ${currentToken})`);
 
-            console.log(`[SSE] 📥 Received '${data.event}' event:`, data);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
 
-            // Filter by token
-            if (currentToken && data.token) {
-                if (data.token !== currentToken) {
-                    return; // Ignore other meeting's events
+                while (isMounted) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const rawData = line.substring(5).trim();
+                            if (!rawData) continue;
+                            
+                            try {
+                                const data = JSON.parse(rawData);
+                                
+                                // Heartbeat and Welcome
+                                if (data.event === 'keep-alive' || data.event === 'welcome') {
+                                    if (data.event === 'welcome') console.log(`[SSE] 🚀 Welcome: "${data.message}"`);
+                                    continue;
+                                }
+
+                                // Filter by token
+                                if (currentToken && data.token && data.token !== currentToken) continue;
+
+                                console.log(`[SSE] 📥 Received '${data.event}' event:`, data);
+
+                                if (data.event === 'file_published') {
+                                    const payload = data.data;
+                                    setFiles((prev) => {
+                                        const exists = prev.find(f => f.id === payload.id);
+                                        if (exists) return prev.map(f => f.id === payload.id ? payload : f);
+                                        return [payload, ...prev];
+                                    });
+                                    setLastPublishedFile(payload);
+                                    if (options?.onFileUpdate) options.onFileUpdate();
+                                } else if (data.event === 'file_hidden') {
+                                    setFiles((prev) => prev.filter(f => f.id !== data.data.id));
+                                    if (options?.onFileUpdate) options.onFileUpdate();
+                                } else if (data.event === 'link_published') {
+                                    const payload = data.data;
+                                    setLinks((prev) => {
+                                        const exists = prev.find(l => l.id === payload.id);
+                                        if (exists) return prev.map(l => l.id === payload.id ? payload : l);
+                                        return [payload, ...prev];
+                                    });
+                                    if (options?.onLinkUpdate) options.onLinkUpdate();
+                                } else if (data.event === 'link_hidden') {
+                                    setLinks((prev) => prev.filter(l => l.id !== data.data.id));
+                                    if (options?.onLinkUpdate) options.onLinkUpdate();
+                                } else if (data.event === 'announcement_broadcast') {
+                                    if (options?.onAnnouncement) options.onAnnouncement(data.data.message);
+                                } else if (data.event === 'connection_count') {
+                                    setConnectionCount(data.count);
+                                } else if (data.event.startsWith('vote')) {
+                                    if (data.event === 'vote_status_changed' && options?.onVoteStatusChange) options.onVoteStatusChange(data.data);
+                                    if (data.event === 'vote_deleted' && options?.onVoteDeleted) options.onVoteDeleted(data.data.id);
+                                    if (data.event === 'vote_cast_count' && options?.onVoteCountUpdate) options.onVoteCountUpdate(data.data);
+                                    if (data.event === 'vote_results_published' && options?.onVoteResults) options.onVoteResults(data.data);
+                                }
+                            } catch (e) {
+                                // console.warn('[SSE] Failed to parse message:', rawData);
+                            }
+                        }
+                    }
+                }
+            } catch (err: any) {
+                if (err.name === 'AbortError') return;
+                console.error(`[SSE] ❌ Stream Error:`, err.message);
+                setConnectionStatus('error');
+                setErrorCount(prev => prev + 1);
+                
+                // Retry after 5 seconds if still mounted
+                if (isMounted) {
+                    setTimeout(() => {
+                        if (isMounted) connect();
+                    }, 5000);
                 }
             }
-
-            if (data.event === 'file_published') {
-                const payload = data.data;
-                setFiles((prev) => {
-                    if (prev.find(f => f.id === payload.id)) return prev;
-                    return [payload, ...prev];
-                });
-                setLastPublishedFile(payload);
-                if (options?.onFileUpdate) options.onFileUpdate();
-            } else if (data.event === 'file_hidden') {
-                setFiles((prev) => prev.filter(f => f.id !== data.data.id));
-                if (options?.onFileUpdate) options.onFileUpdate();
-            } else if (data.event === 'link_published') {
-                const payload = data.data;
-                setLinks((prev) => {
-                    if (prev.find(l => l.id === payload.id)) return prev;
-                    return [payload, ...prev];
-                });
-                if (options?.onLinkUpdate) options.onLinkUpdate();
-            } else if (data.event === 'link_hidden') {
-                setLinks((prev) => prev.filter(l => l.id !== data.data.id));
-                if (options?.onLinkUpdate) options.onLinkUpdate();
-            } else if (data.event === 'announcement_broadcast') {
-                if (options?.onAnnouncement) options.onAnnouncement(data.data.message);
-            } else if (data.event === 'connection_count') {
-                setConnectionCount(data.count);
-            } else if (data.event.startsWith('vote')) {
-                // Pass all vote events to specialized handlers
-                if (data.event === 'vote_status_changed' && options?.onVoteStatusChange) options.onVoteStatusChange(data.data);
-                if (data.event === 'vote_deleted' && options?.onVoteDeleted) options.onVoteDeleted(data.data.id);
-                if (data.event === 'vote_cast_count' && options?.onVoteCountUpdate) options.onVoteCountUpdate(data.data);
-                if (data.event === 'vote_results_published' && options?.onVoteResults) options.onVoteResults(data.data);
-            }
         };
 
-        eventSource.onerror = () => {
-            console.error(`[SSE] ❌ Connection Error (ReadyState: ${eventSource.readyState})`);
-            setConnectionStatus('error');
-            setErrorCount(prev => prev + 1);
-        };
+        connect();
 
         return () => {
-            eventSource.close();
+            isMounted = false;
+            controller.abort();
         };
     }, [url, options]);
 

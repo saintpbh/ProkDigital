@@ -42,7 +42,14 @@ export class EventsService {
     }
 
     async findByToken(token: string) {
-        const event = await this.eventRepository.findOne({ where: { token, is_active: true } });
+        const event = await this.eventRepository.findOne({ 
+            where: { token, is_active: true },
+            relations: ['files', 'links'],
+            order: {
+                files: { id: 'DESC' },
+                links: { id: 'DESC' }
+            }
+        });
         if (!event) throw new NotFoundException('Event not found or inactive');
         return event;
     }
@@ -75,25 +82,30 @@ export class EventsService {
         const updated = await this.linkRepository.save(link);
         const eventToken = updated.event?.token;
 
-        if (updated.is_public) {
-            this.sseService.sendEvent({
-                event: 'link_published',
-                token: eventToken,
-                data: {
-                    id: updated.id,
-                    title: updated.title,
-                    url: updated.url,
-                    published_at: updated.published_at,
-                },
-            });
-        } else {
-            this.sseService.sendEvent({
-                event: 'link_hidden',
-                token: eventToken,
-                data: { id: updated.id },
-            });
+        if (eventToken) {
+            if (updated.is_public) {
+                this.sseService.sendEvent({
+                    event: 'link_published',
+                    token: eventToken,
+                    data: {
+                        id: updated.id,
+                        title: updated.title,
+                        url: updated.url,
+                        published_at: updated.published_at,
+                        is_public: updated.is_public, // Include is_public for consistency
+                    },
+                });
+            } else {
+                this.sseService.sendEvent({
+                    event: 'link_hidden',
+                    token: eventToken,
+                    data: {
+                        id: updated.id,
+                        is_public: updated.is_public, // Include is_public for consistency
+                    },
+                });
+            }
         }
-
         return updated;
     }
 

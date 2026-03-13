@@ -82,26 +82,32 @@ export class FilesService {
 
         const eventToken = file.event?.token;
 
-        if (updated.is_public) {
-            this.sseService.sendEvent({
-                event: 'file_published',
-                token: eventToken,
-                data: {
-                    id: updated.id,
-                    title: updated.title,
-                    url: updated.url,
-                    file_size: updated.file_size,
-                    published_at: updated.published_at,
-                },
-            });
+        if (eventToken) {
+            if (updated.is_public) {
+                this.sseService.sendEvent({
+                    event: 'file_published',
+                    token: eventToken,
+                    data: {
+                        id: updated.id,
+                        title: updated.title,
+                        url: updated.url,
+                        file_size: updated.file_size,
+                        published_at: updated.published_at,
+                        is_public: updated.is_public,
+                    },
+                });
 
-            this.triggerPushNotification(updated);
-        } else {
-            this.sseService.sendEvent({
-                event: 'file_hidden',
-                token: eventToken,
-                data: { id: updated.id },
-            });
+                this.triggerPushNotification(updated);
+            } else {
+                this.sseService.sendEvent({
+                    event: 'file_hidden',
+                    token: eventToken,
+                    data: { 
+                        id: updated.id,
+                        is_public: updated.is_public,
+                    },
+                });
+            }
         }
 
         return updated;
