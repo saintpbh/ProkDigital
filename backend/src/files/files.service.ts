@@ -41,11 +41,20 @@ export class FilesService {
     }
 
     async delete(id: number) {
-        const file = await this.fileRepository.findOne({ where: { id } });
+        const file = await this.fileRepository.findOne({ where: { id }, relations: ['event'] });
         if (!file) throw new NotFoundException();
 
+        const eventToken = file.event?.token;
         await this.storageProvider.deleteFile(file.url);
         await this.fileRepository.remove(file);
+
+        if (eventToken) {
+            this.sseService.sendEvent({
+                event: 'file_hidden',
+                token: eventToken,
+                data: { id },
+            });
+        }
 
         return { success: true };
     }
@@ -76,13 +85,13 @@ export class FilesService {
         if (updated.is_public) {
             this.sseService.sendEvent({
                 event: 'file_published',
+                token: eventToken,
                 data: {
                     id: updated.id,
                     title: updated.title,
                     url: updated.url,
                     file_size: updated.file_size,
                     published_at: updated.published_at,
-                    token: eventToken, // Scoping by token
                 },
             });
 
@@ -90,7 +99,8 @@ export class FilesService {
         } else {
             this.sseService.sendEvent({
                 event: 'file_hidden',
-                data: { id: updated.id, token: eventToken },
+                token: eventToken,
+                data: { id: updated.id },
             });
         }
 

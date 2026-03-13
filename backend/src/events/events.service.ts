@@ -78,18 +78,19 @@ export class EventsService {
         if (updated.is_public) {
             this.sseService.sendEvent({
                 event: 'link_published',
+                token: eventToken,
                 data: {
                     id: updated.id,
                     title: updated.title,
                     url: updated.url,
                     published_at: updated.published_at,
-                    token: eventToken,
                 },
             });
         } else {
             this.sseService.sendEvent({
                 event: 'link_hidden',
-                data: { id: updated.id, token: eventToken },
+                token: eventToken,
+                data: { id: updated.id },
             });
         }
 
@@ -102,9 +103,19 @@ export class EventsService {
     }
 
     async removeLink(id: number) {
-        const link = await this.linkRepository.findOne({ where: { id } });
+        const link = await this.linkRepository.findOne({ where: { id }, relations: ['event'] });
         if (!link) throw new NotFoundException('Link not found');
-        return this.linkRepository.remove(link);
+        const eventToken = link.event?.token;
+        await this.linkRepository.remove(link);
+
+        if (eventToken) {
+            this.sseService.sendEvent({
+                event: 'link_hidden',
+                token: eventToken,
+                data: { id }
+            });
+        }
+        return { success: true };
     }
 
     async updateLink(id: number, data: Partial<LinkRecord>) {
@@ -119,8 +130,8 @@ export class EventsService {
 
         this.sseService.sendEvent({
             event: 'announcement_broadcast',
+            token: event.token,
             data: {
-                token: event.token,
                 message: message
             }
         });

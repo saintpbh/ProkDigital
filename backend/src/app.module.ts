@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { TunnelService } from './tunnel.service';
 import { SseModule } from './sse/sse.module';
 import { FilesModule } from './files/files.module';
 import { FileRecord } from './files/file.entity';
@@ -25,6 +26,6 @@ import { Vote, VoteOption, VoteRecord } from './events/vote.entity';
     EventsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, TunnelService],
 })
 export class AppModule { }

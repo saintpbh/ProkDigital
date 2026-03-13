@@ -11,14 +11,15 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  // Enable CORS for the specific domain
+  // Enable CORS for all origins (required for dynamic tunneling subdomains)
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'https://111.prok.or.kr'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: ['Content-Type', 'Accept', 'bypass-tunnel-reminder', 'Authorization'],
     credentials: true,
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();

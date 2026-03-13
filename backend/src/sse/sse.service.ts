@@ -8,6 +8,7 @@ export class SseService {
   private connectionCount = 0;
 
   sendEvent(event: any) {
+    console.log(`[SSE-SERVER] 📢 Broadcasting event: ${event.event} (Token: ${event.token || 'global'})`);
     this.events$.next(event);
   }
 
@@ -19,11 +20,13 @@ export class SseService {
 
   incrementConnections() {
     this.connectionCount++;
+    console.log(`[SSE-SERVER] 👤 Connection added. Total: ${this.connectionCount}`);
     this.broadcastCount();
   }
 
   decrementConnections() {
     this.connectionCount = Math.max(0, this.connectionCount - 1);
+    console.log(`[SSE-SERVER] 👤 Connection removed. Total: ${this.connectionCount}`);
     this.broadcastCount();
   }
 

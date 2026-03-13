@@ -70,10 +70,10 @@ export class VotesService {
         // SSE Broadcast
         this.sseService.sendEvent({
             event: 'vote_status_changed',
+            token: voteWithRepo.event.token,
             data: {
                 id: updated.id,
                 status: updated.status,
-                token: voteWithRepo.event.token,
                 question: updated.question,
                 type: updated.type,
                 options: voteWithRepo.options // Use pre-loaded options
@@ -94,10 +94,10 @@ export class VotesService {
             const results = this.calculateResults(updated);
             this.sseService.sendEvent({
                 event: 'vote_results_published',
+                token: vote.event.token,
                 data: {
                     id: updated.id,
                     results,
-                    token: vote.event.token
                 }
             });
         }
@@ -131,10 +131,10 @@ export class VotesService {
         const count = await this.recordRepository.count({ where: { vote: { id: voteId } } });
         this.sseService.sendEvent({
             event: 'vote_cast_count',
+            token: vote.event.token,
             data: {
                 id: voteId,
                 count,
-                token: vote.event.token
             }
         });
 
@@ -142,9 +142,19 @@ export class VotesService {
     }
 
     async deleteVote(id: number) {
-        const vote = await this.voteRepository.findOne({ where: { id } });
+        const vote = await this.voteRepository.findOne({ where: { id }, relations: ['event'] });
         if (!vote) throw new NotFoundException();
-        return this.voteRepository.remove(vote);
+        const eventToken = vote.event?.token;
+        await this.voteRepository.remove(vote);
+
+        if (eventToken) {
+            this.sseService.sendEvent({
+                event: 'vote_deleted',
+                token: eventToken,
+                data: { id }
+            });
+        }
+        return { success: true };
     }
 
     private calculateResults(vote: Vote) {

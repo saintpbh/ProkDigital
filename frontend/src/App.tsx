@@ -1,13 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useSSE } from './hooks/useSSE';
 import { EventLogin } from './components/EventLogin';
+import { PWAInstallGuide } from './components/PWAInstallGuide';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:3000';
+// Dynamically determine the API base URL
+// Use relative path for API to leverage Vite proxy, or absolute if explicitly set
+const getInitialApiUrl = () => {
+    // Relative path '/api' is the most stable as it leverages the Vite proxy.
+    // This works seamlessly for both local network access and Cloudflare tunnels.
+    return ''; 
+};
+
+const DEFAULT_API_URL = getInitialApiUrl();
 
 function App() {
+  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [event, setEvent] = useState<any>(null);
+  const [isApiReady, setIsApiReady] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
@@ -27,63 +39,110 @@ function App() {
     return id;
   });
 
-  const { files, setFiles, links, setLinks, connectionCount } = useSSE(
-    event ? `${API_BASE_URL}/api/stream?token=${event.token}` : null,
-    {
-      onAnnouncement: (msg: string) => {
-        setAnnouncement(msg);
-        if (msg) {
-          const newAnnouncement = {
-            id: Date.now().toString(),
-            message: msg,
-            timestamp: new Date().toISOString()
-          };
-          setAnnouncementHistory(prev => {
-            const updated = [newAnnouncement, ...prev];
-            if (token) localStorage.setItem(`announcements_${token}`, JSON.stringify(updated));
-            return updated;
-          });
-        }
-      },
-      onVoteStatusChange: (v) => {
-        console.log('Vote status changed via SSE:', v);
-        if (v.status === 'OPEN') {
-          setActiveVote((prev: any) => {
-            // Merge options if missing in update but present in prev
-            const options = v.options && v.options.length > 0 ? v.options : (prev?.options || []);
-            return { ...prev, ...v, options };
-          });
-          setVoteResults(null);
-          setHasVoted(false);
-        } else if (v.status === 'CLOSED') {
-          setActiveVote((prev: any) => prev ? { ...prev, ...v, status: 'CLOSED' } : v);
-        } else if (v.status === 'WAITING') {
-          setActiveVote(null);
-          setVoteResults(null);
-          setHasVoted(false);
-        }
-      },
-      onVoteCountUpdate: (data) => {
-        setActiveVote((prev: any) => {
-          if (prev && (prev.id === data.id)) {
-            return { ...prev, voted_count: data.count };
-          }
-          return prev;
+  // SSE Options with stable references
+  const sseOptions = useState(() => ({
+    onAnnouncement: (msg: string) => {
+      setAnnouncement(msg);
+      if (msg) {
+        const newAnnouncement = {
+          id: Date.now().toString(),
+          message: msg,
+          timestamp: new Date().toISOString()
+        };
+        setAnnouncementHistory(prev => {
+          const updated = [newAnnouncement, ...prev];
+          // Get token from localStorage to avoid stale closure if needed, or similar
+          const currentToken = window.location.pathname.startsWith('/join/') 
+            ? window.location.pathname.split('/join/')[1] 
+            : localStorage.getItem('eventToken');
+          if (currentToken) localStorage.setItem(`announcements_${currentToken}`, JSON.stringify(updated));
+          return updated;
         });
-      },
-      onVoteResults: (data) => {
-        setVoteResults(data.results);
       }
-    }
-  );
+    },
+    onVoteStatusChange: (v: any) => {
+      console.log('Vote status changed via SSE:', v);
+      if (v.status === 'OPEN') {
+        setActiveVote((prev: any) => {
+          const options = v.options && v.options.length > 0 ? v.options : (prev?.options || []);
+          return { ...prev, ...v, options };
+        });
+        setVoteResults(null);
+        setHasVoted(false);
+      } else if (v.status === 'CLOSED') {
+        setActiveVote((prev: any) => prev ? { ...prev, ...v, status: 'CLOSED' } : v);
+      } else if (v.status === 'WAITING') {
+        setActiveVote(null);
+        setVoteResults(null);
+        setHasVoted(false);
+      }
+    },
+    onVoteDeleted: (id: number) => {
+      setActiveVote((prev: any) => {
+        if (prev?.id === id) return null;
+        return prev;
+      });
+      setVoteResults(null);
+      setHasVoted(false);
+    },
+    onVoteCountUpdate: (data: any) => {
+      setActiveVote((prev: any) => {
+        if (prev && (prev.id === data.id)) {
+          return { ...prev, voted_count: data.count };
+        }
+        return prev;
+      });
+    },
+    onVoteResults: (data: any) => {
+      setVoteResults(data.results);
+    },
+    onFileUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
+    onLinkUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
+  }))[0];
 
+  const sseUrl = event 
+    ? (event.token ? `${apiUrl}/api/stream?token=${event.token}` : `${apiUrl}/api/stream`)
+    : null;
+
+  const { files, setFiles, links, setLinks, connectionCount, connectionStatus, errorCount } = useSSE(sseUrl, sseOptions);
   useEffect(() => {
-    const path = window.location.pathname;
-    const eventToken = path.split('/join/')[1];
+    // If on localhost, verify if we should be using a different IP from the backend
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      fetch('http://localhost:3000/api/system/ip')
+        .then(r => {
+          if (!r.ok) throw new Error('Failed to fetch IP');
+          return r.json();
+        })
+        .then(data => {
+          if (data && data.ip && data.ip !== '127.0.0.1') {
+            console.log('Switching to network IP:', data.ip);
+            setApiUrl(`http://${data.ip}:3000`);
+          }
+          setIsApiReady(true);
+        })
+        .catch((err) => {
+          console.warn('Could not fetch dynamic IP, using default (localhost).', err);
+          setIsApiReady(true);
+        });
+    } else {
+      setIsApiReady(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (!isApiReady) return;
+
+    const eventToken = window.location.pathname.startsWith('/join/') 
+      ? window.location.pathname.split('/join/')[1] 
+      : localStorage.getItem('eventToken');
     if (eventToken) {
       setToken(eventToken);
-      fetch(`${API_BASE_URL}/api/events/token/${eventToken}`)
-        .then(res => res.json())
+      fetch(`${apiUrl}/api/events/token/${eventToken}`, {
+        headers: { 'bypass-tunnel-reminder': 'true' }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+          return res.json();
+        })
         .then(data => {
           setEvent(data);
           if (data.current_announcement) {
@@ -99,21 +158,47 @@ function App() {
             }
           }
           // Fetch initial votes for this event
-          fetch(`${API_BASE_URL}/api/votes?eventId=${data.id}`)
+          fetch(`${apiUrl}/api/votes?eventId=${data.id}`, {
+            headers: { 'bypass-tunnel-reminder': 'true' }
+          })
             .then(r => r.json())
             .then(votesList => {
               const active = votesList.find((v: any) => v.status === 'OPEN');
               if (active) setActiveVote(active);
             });
         })
-        .catch(err => console.error('Failed to fetch event', err));
+        .catch(err => {
+          console.error('Failed to fetch event', err);
+          setError(`행사 정보를 가져오는 데 실패했습니다: ${err.message}`);
+        })
+        .finally(() => {
+            // Once we have basic event info, load its metadata (files, links)
+            // This is safer to do here than in a separate useEffect to avoid race
+        });
     }
-  }, []);
+  }, [isApiReady, apiUrl]);
+
+  // Secondary effect to fetch event data once the event object is set
+  useEffect(() => {
+    if (event?.id) {
+        fetchEventData(event.id);
+    }
+  }, [event?.id]);
+
+  useEffect(() => {
+    const handler = () => {
+        if (event?.id) fetchEventData(event.id);
+    };
+    window.addEventListener('sse-refresh-data', handler);
+    return () => window.removeEventListener('sse-refresh-data', handler);
+  }, [event?.id]);
 
   const handleLogin = async (passcode: string) => {
-    const res = await fetch(`${API_BASE_URL}/api/events/validate`, {
+    const res = await fetch(`${apiUrl}/api/events/validate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ token, passcode }),
     });
     const isValid = await res.json();
@@ -128,9 +213,11 @@ function App() {
   const castVote = async (optionId: number) => {
     if (!activeVote || hasVoted) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/votes/${activeVote.id}/cast`, {
+      const res = await fetch(`${apiUrl}/api/votes/${activeVote.id}/cast`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ optionId, voterToken: voterId }),
       });
       if (res.ok) {
@@ -146,9 +233,12 @@ function App() {
     }
   };
 
-  const fetchEventData = () => {
-    if (!event) return;
-    fetch(`${API_BASE_URL}/api/events/${event.id}`)
+  const fetchEventData = (eventId?: number) => {
+    const targetId = eventId || event?.id;
+    if (!targetId) return;
+    fetch(`${apiUrl}/api/events/${targetId}`, {
+      headers: { 'bypass-tunnel-reminder': 'true' }
+    })
       .then(res => res.json())
       .then(data => {
         setFiles(data.files.filter((f: any) => f.is_public));
@@ -173,8 +263,18 @@ function App() {
 
   if (!event) return (
     <div className="loading-container">
-      <div className="loader"></div>
-      <p>행사 정보를 확인하는 중...</p>
+      {error ? (
+        <div className="error-box">
+          <h3>⚠️ 오류가 발생했습니다</h3>
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>다시 시도</button>
+        </div>
+      ) : (
+        <>
+          <div className="loader"></div>
+          <p>행사 정보를 확인하는 중...</p>
+        </>
+      )}
     </div>
   );
 
@@ -184,6 +284,7 @@ function App() {
 
   return (
     <div className="app">
+      <PWAInstallGuide />
       <header className="header">
         <h1>{event.name}</h1>
         <div className="connection-badge">
@@ -192,13 +293,26 @@ function App() {
       </header>
       <main className="container">
         {announcement && (
-          <section className="announcement-overlay">
+          <div className="announcement-overlay">
             <div className="announcement-content">
               <span className="announcement-icon">📢</span>
               <div className="announcement-text">{announcement}</div>
               <button className="btn-close-announcement" onClick={() => setAnnouncement(null)}>닫기</button>
             </div>
-          </section>
+          </div>
+        )}
+
+        {(connectionStatus === 'error' || errorCount > 2) && (
+          <div className="connection-error-banner">
+            <div className="error-content">
+              <span className="error-icon">⚠️</span>
+              <div className="error-text">
+                <strong>실시간 연결 끊김!</strong> 
+                호스트가 서버를 재시작했을 수 있습니다. 대의원 페이지를 새로고침하거나 새로운 접속 주소를 확인해 주세요.
+              </div>
+              <button className="btn-retry" onClick={() => window.location.reload()}>새로고침</button>
+            </div>
+          </div>
         )}
 
         {/* Notification when NOT on vote tab */}
@@ -257,7 +371,7 @@ function App() {
                     PDF · {file.file_size} · {new Date(file.published_at).toLocaleTimeString()} 공개
                   </div>
                 </div>
-                <button className="btn-view" onClick={() => window.open(`${API_BASE_URL}${file.url}`, '_blank')}>
+                <button className="btn-view" onClick={() => window.open(`${apiUrl}${file.url}`, '_blank')}>
                   열람
                 </button>
               </div>
@@ -463,13 +577,31 @@ function App() {
         .link-card .url-hint { font-size: 11px; color: #64b5f6; }
 
         .connection-badge {
-          background: rgba(255,255,255,0.15);
+          background: ${connectionStatus === 'connected' ? 'rgba(76, 175, 80, 0.2)' : connectionStatus === 'error' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(255,255,255,0.15)'};
           padding: 6px 12px;
           border-radius: 20px;
           font-size: 0.85rem;
           display: inline-block;
           margin-top: 10px;
+          border: 1px solid ${connectionStatus === 'connected' ? '#4caf50' : connectionStatus === 'error' ? '#f44336' : 'transparent'};
         }
+        .connection-error-banner {
+          background: #ffebee;
+          border: 2px solid #f44336;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          padding: 15px;
+          animation: shake 0.5s ease-in-out;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        .error-content { display: flex; align-items: center; gap: 12px; color: #b71c1c; }
+        .error-text { flex: 1; font-size: 0.9rem; line-height: 1.4; }
+        .btn-retry { background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .agenda-info {
           background: white;
           border-radius: 12px;

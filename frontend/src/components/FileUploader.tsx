@@ -3,9 +3,11 @@ import React, { useState, useRef } from 'react';
 interface FileUploaderProps {
     eventId: number;
     onUploadSuccess: () => void;
+    apiUrl?: string;
 }
 
-const FileUploader: React.FC<FileUploaderProps> = ({ eventId, onUploadSuccess }) => {
+const FileUploader: React.FC<FileUploaderProps> = ({ eventId, onUploadSuccess, apiUrl }) => {
+    const API_BASE_URL = apiUrl !== undefined ? apiUrl : 'http://localhost:3000';
     const [isDragging, setIsDragging] = useState(false);
     const [progress, setProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
@@ -47,7 +49,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({ eventId, onUploadSuccess })
         formData.append('file', file);
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `http://localhost:3000/api/files/upload?eventId=${eventId}`, true);
+        xhr.open('POST', `${API_BASE_URL}/api/files/upload?eventId=${eventId}`, true);
+        xhr.setRequestHeader('bypass-tunnel-reminder', 'true');
 
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
