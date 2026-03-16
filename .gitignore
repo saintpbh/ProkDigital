@@ -8,3 +8,16 @@ backend/uploads/*.pdf
 tsc_errors.txt
 .vscode/
 .idea/
+
+# Secrets & Configs
+.env
+.env.local
+*.json
+!package.json
+!firebase.json
+!package-lock.json
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log

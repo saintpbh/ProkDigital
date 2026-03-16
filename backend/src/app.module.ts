@@ -8,6 +8,7 @@ import { FilesModule } from './files/files.module';
 import { FileRecord } from './files/file.entity';
 import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './events/events.module';
+import { FirebaseModule } from './firebase/firebase.module';
 import { Event } from './events/event.entity';
 import { LinkRecord } from './events/link.entity';
 import { Vote, VoteOption, VoteRecord } from './events/vote.entity';
@@ -24,6 +25,7 @@ import { Vote, VoteOption, VoteRecord } from './events/vote.entity';
     FilesModule,
     StorageModule,
     EventsModule,
+    FirebaseModule,
   ],
   controllers: [AppController],
   providers: [AppService, TunnelService],

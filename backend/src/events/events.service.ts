@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Event } from './event.entity';
 import { LinkRecord } from './link.entity';
 import { SseService } from '../sse/sse.service';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class EventsService {
@@ -13,6 +14,7 @@ export class EventsService {
         @InjectRepository(LinkRecord)
         private readonly linkRepository: Repository<LinkRecord>,
         private readonly sseService: SseService,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async create(name: string, passcode: string) {
@@ -106,6 +108,16 @@ export class EventsService {
                 });
             }
         }
+
+        // Sync to Firebase
+        await this.firebaseService.syncToFirestore('links', updated.id.toString(), {
+            title: updated.title,
+            url: updated.url,
+            event_id: updated.event?.id,
+            is_public: updated.is_public,
+            published_at: updated.published_at
+        });
+
         return updated;
     }
 
@@ -127,6 +139,7 @@ export class EventsService {
                 data: { id }
             });
         }
+        await this.firebaseService.deleteFromFirestore('links', id.toString());
         return { success: true };
     }
 
@@ -146,6 +159,11 @@ export class EventsService {
             data: {
                 message: message
             }
+        });
+
+        await this.firebaseService.syncToFirestore('events', event.id.toString(), {
+            current_announcement: message,
+            token: event.token
         });
 
         return { success: true };

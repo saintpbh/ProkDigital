@@ -83,22 +83,35 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
+                let lastActivity = Date.now();
+
+                // Watchdog to reconnect if no data received for 45s
+                const watchdog = setInterval(() => {
+                    if (Date.now() - lastActivity > 45000) {
+                        console.warn('[SSE] 🐕 Watchdog timeout (no data for 45s). Reconnecting...');
+                        controller.abort();
+                    }
+                }, 10000);
 
                 while (isMounted) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
+                    lastActivity = Date.now();
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
+                        if (line.trim() === '') continue;
+                        // console.log('[SSE] Raw Line:', line); // Extremely verbose, enable if needed
+
                         if (line.startsWith('data:')) {
                             const rawData = line.substring(5).trim();
                             if (!rawData) continue;
                             
                             try {
-                                const data = JSON.parse(rawData);
+                                const data = JSON.parse(rawData) as any;
                                 
                                 // Heartbeat and Welcome
                                 if (data.event === 'keep-alive' || data.event === 'welcome') {
@@ -107,7 +120,10 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                                 }
 
                                 // Filter by token
-                                if (currentToken && data.token && data.token !== currentToken) continue;
+                                if (currentToken && data.token && data.token !== currentToken) {
+                                    console.log(`[SSE] ⏭️ Filtered out event (Token mismatch: ${data.token} vs ${currentToken})`);
+                                    continue;
+                                }
 
                                 console.log(`[SSE] 📥 Received '${data.event}' event:`, data);
 
@@ -151,6 +167,7 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                         }
                     }
                 }
+                clearInterval(watchdog);
             } catch (err: any) {
                 if (err.name === 'AbortError') return;
                 console.error(`[SSE] ❌ Stream Error:`, err.message);

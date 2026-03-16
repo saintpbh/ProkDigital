@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FileRecord } from './file.entity';
 import { SseService } from '../sse/sse.service';
+import { FirebaseService } from '../firebase/firebase.service';
 import { STORAGE_PROVIDER } from '../storage/storage.interface';
 import type { IStorageProvider } from '../storage/storage.interface';
 import { Event } from '../events/event.entity';
@@ -17,6 +18,7 @@ export class FilesService {
         private readonly sseService: SseService,
         @Inject(STORAGE_PROVIDER)
         private readonly storageProvider: IStorageProvider,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async createWithStorage(file: Express.Multer.File, eventId: number) {
@@ -55,6 +57,8 @@ export class FilesService {
                 data: { id },
             });
         }
+
+        await this.firebaseService.deleteFromFirestore('files', id.toString());
 
         return { success: true };
     }
@@ -109,6 +113,16 @@ export class FilesService {
                 });
             }
         }
+
+        // Sync to Firebase
+        await this.firebaseService.syncToFirestore('files', updated.id.toString(), {
+            title: updated.title,
+            url: updated.url,
+            file_size: updated.file_size,
+            is_public: updated.is_public,
+            published_at: updated.published_at,
+            event_id: updated.event?.id
+        });
 
         return updated;
     }

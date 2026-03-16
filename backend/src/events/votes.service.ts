@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Vote, VoteOption, VoteRecord, VoteStatus, VoteType } from './vote.entity';
 import { Event } from './event.entity';
 import { SseService } from '../sse/sse.service';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class VotesService {
@@ -17,6 +18,7 @@ export class VotesService {
         @InjectRepository(Event)
         private readonly eventRepository: Repository<Event>,
         private readonly sseService: SseService,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async createVote(eventId: number, question: string, type: VoteType, options: string[]) {
@@ -80,6 +82,15 @@ export class VotesService {
             }
         });
 
+        // Sync to Firebase
+        await this.firebaseService.syncToFirestore('votes', updated.id.toString(), {
+            status: updated.status,
+            question: updated.question,
+            type: updated.type,
+            options: voteWithRepo.options,
+            event_id: voteWithRepo.event.id
+        });
+
         return updated;
     }
 
@@ -101,6 +112,12 @@ export class VotesService {
                 }
             });
         }
+
+        // Sync to Firebase
+        await this.firebaseService.syncToFirestore('votes', updated.id.toString(), {
+            show_results: updated.show_results,
+            results: show ? this.calculateResults(updated) : null
+        });
 
         return updated;
     }
@@ -138,6 +155,11 @@ export class VotesService {
             }
         });
 
+        // Sync to Firebase (voted_count)
+        await this.firebaseService.syncToFirestore('votes', voteId.toString(), {
+            voted_count: count
+        });
+
         return { success: true };
     }
 
@@ -154,6 +176,7 @@ export class VotesService {
                 data: { id }
             });
         }
+        await this.firebaseService.deleteFromFirestore('votes', id.toString());
         return { success: true };
     }
 

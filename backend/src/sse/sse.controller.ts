@@ -7,33 +7,31 @@ import { SseService } from './sse.service';
 export class SseController {
     constructor(private readonly sseService: SseService) { }
 
+    @Header('X-Accel-Buffering', 'no')
+    @Header('Cache-Control', 'no-cache, no-transform')
+    @Header('Connection', 'keep-alive')
     @Sse()
-    sse(@Res() res: Response): Observable<any> {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no');
-
+    sse(): Observable<MessageEvent> {
         this.sseService.incrementConnections();
 
-        // 32KB padding to burst aggressive proxy buffers (Cloudflare/Nginx)
-        const padding = ' '.repeat(32768); 
+        // Welcome message
         const welcome$ = of({ 
             data: { 
                 event: 'welcome', 
-                message: 'SSE Connection Established (Super Burst Mode)',
-                padding: padding
+                message: 'SSE Connection Established',
+                // Keep some padding but in a safer way
+                padding: ' '.repeat(4096) 
             } 
-        });
+        } as MessageEvent);
 
         const keepAlive$ = interval(3000).pipe(
             map(() => ({ 
                 data: { 
                     event: 'keep-alive', 
                     timestamp: new Date().toISOString(),
-                    padding: '-'.repeat(1024) // Periodic padding to keep the pipe open
+                    padding: ' '.repeat(1024) // Force flush every 3s
                 } 
-            }))
+            } as MessageEvent))
         );
 
         return merge(

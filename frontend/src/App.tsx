@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSSE } from './hooks/useSSE';
+import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
 import './App.css';
@@ -108,11 +109,59 @@ function App() {
     }
   }))[0];
 
-  const sseUrl = event 
-    ? (event.token ? `${apiUrl}/api/stream?token=${event.token}` : `${apiUrl}/api/stream`)
-    : null;
+  // 1. Firebase Sync (Primary for Real-time)
+  const { 
+    files: fbFiles, 
+    links: fbLinks,
+    setFiles: setFbFiles,
+    setLinks: setFbLinks
+  } = useFirebaseSync(token, {
+    onAnnouncement: (msg: string) => setAnnouncement(msg),
+    onNewFilePublished: (url: string) => {
+      console.log('[Firebase] Pre-fetching new file:', url);
+      setPrefetchUrl(`${apiUrl}${url}`);
+      setTimeout(() => setPrefetchUrl(null), 10000);
+    },
+    onFileUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
+    onLinkUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
+    onVoteUpdate: (v: any) => {
+      if (!v) {
+        setActiveVote(null);
+        setVoteResults(null);
+        setHasVoted(false);
+        return;
+      }
+      console.log('[Firebase] Vote status changed:', v);
+      if (v.status === 'OPEN') {
+        setActiveVote((prev: any) => ({ ...prev, ...v }));
+        setVoteResults(v.results || null);
+        // Only reset hasVoted if it's a completely new vote
+        if (activeVote?.id !== v.id) setHasVoted(false);
+      } else if (v.status === 'CLOSED') {
+        setActiveVote((prev: any) => prev ? { ...prev, ...v, status: 'CLOSED' } : v);
+        if (v.results) setVoteResults(v.results);
+      }
+    }
+  });
 
-  const { files, setFiles, links, setLinks, connectionCount, connectionStatus, errorCount } = useSSE(sseUrl, sseOptions);
+  // 2. Legacy SSE (Secondary/Fallback) - Only used if Firebase not connected
+  // Note: We keep this for now to ensure NO regression during migration
+  const memoSseUrl = (event && event.token) 
+    ? `${apiUrl}/api/stream?token=${event.token}` 
+    : (event ? `${apiUrl}/api/stream` : null);
+
+  const { 
+    files: sseFiles, 
+    links: sseLinks, 
+    connectionCount, 
+    connectionStatus, 
+    errorCount 
+  } = useSSE(memoSseUrl, sseOptions);
+
+  // Derived state: Favor Firebase data if available, otherwise use SSE/Local
+  const displayFiles = fbFiles.length > 0 ? fbFiles : sseFiles;
+  const displayLinks = fbLinks.length > 0 ? fbLinks : sseLinks;
+
   useEffect(() => {
     // If on localhost, verify if we should be using a different IP from the backend
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -202,11 +251,30 @@ function App() {
   }, [event?.id]);
 
   const handleLogin = async (passcode: string) => {
+    try {
+      // 1. Try Firebase Cloud Function first (Serverless)
+      const res = await fetch('/api/v2/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, passcode }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsLoggedIn(true);
+          setEvent(data.event);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Cloud login failed, falling back to local backend:', e);
+    }
+
+    // 2. Fallback to Local Backend
     const res = await fetch(`${apiUrl}/api/events/validate`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, passcode }),
     });
     const isValid = await res.json();
@@ -221,11 +289,31 @@ function App() {
   const castVote = async (optionId: number) => {
     if (!activeVote || hasVoted) return;
     try {
+      // 1. Try Firebase Cloud Function (Serverless)
+      const res = await fetch('/api/v2/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token, 
+          voteId: activeVote.id, 
+          choices: [optionId], 
+          delegateId: voterId 
+        }),
+      });
+
+      if (res.ok) {
+        setHasVoted(true);
+        return;
+      }
+    } catch (e) {
+      console.warn('Cloud vote failed, falling back to local backend:', e);
+    }
+
+    // 2. Fallback to Local Backend
+    try {
       const res = await fetch(`${apiUrl}/api/votes/${activeVote.id}/cast`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ optionId, voterToken: voterId }),
       });
       if (res.ok) {
@@ -249,8 +337,12 @@ function App() {
     })
       .then(res => res.json())
       .then(data => {
-        setFiles(data.files.filter((f: any) => f.is_public));
-        setLinks(data.links.filter((l: any) => l.is_public));
+        const publicFiles = data.files.filter((f: any) => f.is_public);
+        const publicLinks = data.links.filter((l: any) => l.is_public);
+        
+        // Sync with both state handlers
+        setFbFiles(publicFiles);
+        setFbLinks(publicLinks);
       });
   };
 
@@ -352,10 +444,10 @@ function App() {
 
         {activeTab === 'agenda' && (
           <section className="content-list">
-            {links.length > 0 && (
+            {displayLinks.length > 0 && (
               <div className="link-section">
                 <h3>외부 링크 (설문/영상)</h3>
-                {links.map(link => (
+                {displayLinks.map((link: any) => (
                   <div key={link.id} className="link-card" onClick={() => window.open(link.url, '_blank')}>
                     <span className="icon">🔗</span>
                     <div className="link-info">
@@ -368,7 +460,7 @@ function App() {
             )}
 
             <h3>참여 문서 (PDF)</h3>
-            {files.map((file, index) => (
+            {displayFiles.map((file: any, index: number) => (
               <div key={file.id} className="file-card">
                 <div className="file-info">
                   <div className="title">
@@ -385,7 +477,7 @@ function App() {
               </div>
             ))}
 
-            {files.length === 0 && links.length === 0 && (
+            {displayFiles.length === 0 && displayLinks.length === 0 && (
               <div className="empty-state">
                 공개된 문서가 없습니다. 잠시만 기다려주세요.
               </div>
