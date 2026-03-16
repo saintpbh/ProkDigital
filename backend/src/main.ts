@@ -6,9 +6,14 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Serve static files (uploads)
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+  // Serve static files (uploads) with aggressive caching for speed
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
+    maxAge: 31536000000, // 1 year (Cloudflare will cache this)
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
   });
 
   // Enable CORS for all origins (required for dynamic tunneling subdomains)

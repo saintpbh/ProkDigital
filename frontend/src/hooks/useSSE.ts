@@ -34,6 +34,7 @@ interface SSEOptions {
     onVoteResults?: (data: { id: number, results: any }) => void;
     onFileUpdate?: () => void;
     onLinkUpdate?: () => void;
+    onNewFilePublished?: (url: string) => void;
 }
 
 export const useSSE = (url: string | null, options?: SSEOptions) => {
@@ -119,6 +120,7 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                                     });
                                     setLastPublishedFile(payload);
                                     if (options?.onFileUpdate) options.onFileUpdate();
+                                    if (options?.onNewFilePublished) options.onNewFilePublished(payload.url);
                                 } else if (data.event === 'file_hidden') {
                                     setFiles((prev) => prev.filter(f => f.id !== data.data.id));
                                     if (options?.onFileUpdate) options.onFileUpdate();

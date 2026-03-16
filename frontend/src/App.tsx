@@ -29,6 +29,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<'agenda' | 'vote' | 'schedule' | 'info'>('agenda');
   const [announcementHistory, setAnnouncementHistory] = useState<{ id: string, message: string, timestamp: string }[]>([]);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
 
   const [voterId] = useState(() => {
     let id = localStorage.getItem('voterId');
@@ -98,6 +100,12 @@ function App() {
     },
     onFileUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
     onLinkUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
+    onNewFilePublished: (url: string) => {
+      console.log('[PDF] Pre-fetching new file:', url);
+      setPrefetchUrl(`${apiUrl}${url}`);
+      // Clear prefetch after 10s to allow reuse
+      setTimeout(() => setPrefetchUrl(null), 10000);
+    }
   }))[0];
 
   const sseUrl = event 
@@ -371,7 +379,7 @@ function App() {
                     PDF · {file.file_size} · {new Date(file.published_at).toLocaleTimeString()} 공개
                   </div>
                 </div>
-                <button className="btn-view" onClick={() => window.open(`${apiUrl}${file.url}`, '_blank')}>
+                <button className="btn-view" onClick={() => setViewerUrl(`${apiUrl}${file.url}`)}>
                   열람
                 </button>
               </div>
@@ -525,6 +533,37 @@ function App() {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Integrated PDF Viewer Overlay */}
+        {viewerUrl && (
+          <div className="pdf-viewer-overlay" onClick={() => setViewerUrl(null)}>
+            <div className="pdf-viewer-container" onClick={(e) => e.stopPropagation()}>
+              <div className="pdf-viewer-header">
+                <h3>문서 열람</h3>
+                <button className="btn-close-viewer" onClick={() => setViewerUrl(null)}>닫기</button>
+              </div>
+              <div className="pdf-viewer-body">
+                <iframe 
+                  src={viewerUrl} 
+                  title="PDF Viewer" 
+                  width="100%" 
+                  height="100%"
+                  style={{ border: 'none' }}
+                />
+              </div>
+              <div className="pdf-viewer-footer">
+                <button className="btn-full-screen" onClick={() => window.open(viewerUrl, '_blank')}>
+                  브라우저로 보기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden Pre-fetch Buffer */}
+        {prefetchUrl && (
+          <iframe src={prefetchUrl} style={{ display: 'none' }} title="prefetch-buffer" />
         )}
 
       </main>
@@ -710,6 +749,29 @@ function App() {
           color: white; border: none; padding: 14px; border-radius: 12px; 
           font-weight: bold; cursor: pointer; font-size: 1rem;
         }
+
+        .pdf-viewer-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center; z-index: 3000;
+        }
+        .pdf-viewer-container {
+          background: white; width: 95%; height: 90%; border-radius: 20px;
+          display: flex; flex-direction: column; overflow: hidden;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .pdf-viewer-header {
+          padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #eee;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .pdf-viewer-header h3 { margin: 0; font-size: 1rem; color: #333; }
+        .btn-close-viewer { 
+          background: #333; color: white; border: none; padding: 6px 15px; 
+          border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold;
+        }
+        .pdf-viewer-body { flex: 1; background: #525659; position: relative; }
+        .pdf-viewer-footer { padding: 10px; background: #f8f9fa; border-top: 1px solid #eee; text-align: center; }
+        .btn-full-screen { background: none; border: 1px solid #ccc; color: #666; padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
       `}</style>
     </div>
   );
