@@ -4,8 +4,16 @@ import FileUploader from './components/FileUploader';
 
 // Use relative path for API to leverage Vite proxy, or absolute if explicitly set
 const getApiBaseUrl = () => {
-    // Relative path '/api' is the most stable as it leverages the Vite proxy.
-    // This works seamlessly for both local network access and Cloudflare tunnels.
+    const manualUrl = localStorage.getItem('MANUAL_API_BASE_URL');
+    if (manualUrl) return manualUrl;
+    
+    // If hosted on Firebase, relative paths won't work for admin APIs because they don't exist
+    // in Cloud Functions. Point directly to the local NestJS server.
+    if (window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app')) {
+        return 'http://localhost:3000';
+    }
+
+    // Relative path '/api' is the most stable as it leverages the Vite proxy for local development.
     return ''; 
 };
 
@@ -139,6 +147,7 @@ export default function Admin() {
     };
 
     useEffect(() => {
+        let isMounted = true;
         // Fetch current service IP from local backend
         fetch(`${LOCAL_CONTROL_API}/api/system/ip`, {
             headers: { 'bypass-tunnel-reminder': 'true' }
@@ -148,16 +157,22 @@ export default function Admin() {
                 return r.json();
             })
             .then(data => {
-                if (data && data.ip) {
+                if (isMounted && data && data.ip) {
                     setServiceIp(data.ip);
                 }
             })
             .catch(err => {
-                console.warn('Failed to detect service IP.', err);
-                setServiceIp('127.0.0.1');
+                // Suppress verbose error if running externally since it's expected
+                if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                    console.log('Running externally, skipping local IP detection.');
+                } else {
+                    console.warn('Failed to detect service IP (Local backend might be offline).', err.message);
+                }
+                if (isMounted) setServiceIp('127.0.0.1');
             });
         
         fetchEvents();
+        return () => { isMounted = false; };
     }, []);
 
     useEffect(() => {

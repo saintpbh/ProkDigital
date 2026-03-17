@@ -172,13 +172,22 @@ export const useSSE = (url: string | null, options?: SSEOptions) => {
                 if (err.name === 'AbortError') return;
                 console.error(`[SSE] ❌ Stream Error:`, err.message);
                 setConnectionStatus('error');
-                setErrorCount(prev => prev + 1);
                 
-                // Retry after 5 seconds if still mounted
+                // Track errors and stop after max retries (e.g., 3)
+                const nextErrorCount = errorCount + 1;
+                setErrorCount(nextErrorCount);
+                
                 if (isMounted) {
-                    setTimeout(() => {
-                        if (isMounted) connect();
-                    }, 5000);
+                    if (nextErrorCount < 3) {
+                        // Retry after 5 seconds if still mounted
+                        console.log(`[SSE] 🔄 Retrying connection in 5s (Attempt ${nextErrorCount}/3)...`);
+                        setTimeout(() => {
+                            if (isMounted) connect();
+                        }, 5000);
+                    } else {
+                        console.warn(`[SSE] 🛑 Max retries reached (3). Giving up on local stream.`);
+                        setConnectionStatus('disconnected'); // Set to disconnected so UI knows it gave up
+                    }
                 }
             }
         };

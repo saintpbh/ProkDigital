@@ -164,7 +164,10 @@ function App() {
 
   useEffect(() => {
     // If on localhost, verify if we should be using a different IP from the backend
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isFirebase = window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app');
+
+    if (isLocal && !isFirebase) {
       fetch('http://localhost:3000/api/system/ip')
         .then(r => {
           if (!r.ok) throw new Error('Failed to fetch IP');
