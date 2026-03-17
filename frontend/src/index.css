@@ -1,20 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap');
 
 :root {
-  --primary: #1a237e;
-  --primary-light: #534bae;
-  --primary-dark: #000051;
-  --accent: #448aff;
-  --success: #00c853;
-  --warning: #ffd600;
-  --error: #ff5252;
-  --bg: #f5f7fa;
-  --card-bg: rgba(255, 255, 255, 0.85);
-  --text-main: #1a1a1b;
-  --text-sub: #64748b;
-  --glass: rgba(255, 255, 255, 0.7);
-  --border: rgba(226, 232, 240, 0.8);
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --primary: #1e1b4b; /* Deep Indigo 950 */
+  --primary-light: #4338ca; /* Indigo 700 */
+  --primary-dark: #0f172a; /* Slate 900 - for main text */
+  --accent: #2563eb; /* Blue 600 */
+  --success: #047857; /* Emerald 700 */
+  --warning: #b45309; /* Amber 700 */
+  --error: #be123c; /* Rose 700 */
+  --bg: #f1f5f9; /* Slate 100 - more structured background */
+  --surface-card: #ffffff;
+  --text-main: #0f172a; /* Slate 900 - high contrast */
+  --text-sub: #475569; /* Slate 600 - darker than before */
+  --glass: rgba(255, 255, 255, 0.9); /* More opaque */
+  --border: rgba(15, 23, 42, 0.15); /* Darker, more visible borders */
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;

@@ -632,14 +632,14 @@ const dashboardStyles = `
 
     .event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px; }
     .event-card { 
-      background: white; border-radius: 24px; border: 1px solid var(--border); overflow: hidden; 
+      background: white; border-radius: 24px; border: 2px solid var(--border); overflow: hidden; 
       box-shadow: var(--shadow); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       animation: fadeInUp 0.6s ease-out both;
     }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-    .event-card:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: var(--primary-light); }
+    .event-card:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(0,0,0,0.12); border-color: var(--primary-light); }
     
-    .card-main { padding: 35px; cursor: pointer; position: relative; }
+    .card-main { padding: 35px; cursor: pointer; position: relative; background: #ffffff; }
     .event-tag { 
       font-size: 11px; font-weight: 800; color: white; background: var(--accent); 
       padding: 4px 12px; border-radius: 20px; margin-bottom: 20px; display: inline-block;
@@ -649,7 +649,7 @@ const dashboardStyles = `
     .event-card p { margin: 0; color: var(--text-sub); font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
     
     .card-actions { 
-      background: #f8fafc; padding: 15px 25px; display: flex; gap: 12px; border-top: 1px solid #f1f5f9;
+      background: #f1f5f9; padding: 15px 25px; display: flex; gap: 12px; border-top: 2px solid var(--border);
       justify-content: flex-end;
     }
     .card-actions button { 
@@ -720,10 +720,11 @@ const managementStyles = `
       overflow: hidden; box-shadow: var(--shadow);
     }
     table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 20px 25px; background: #f8fafc; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; }
-    td { padding: 20px 25px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    th { text-align: left; padding: 20px 25px; background: #e2e8f0; border-bottom: 2px solid var(--border); font-size: 0.85rem; color: var(--text-main); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    td { padding: 20px 25px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; color: var(--text-main); font-weight: 500; }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #fafbfc; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    tr:hover td { background: #f1f5f9; }
 
     .tag { padding: 6px 14px; border-radius: 30px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
     .tag.on { background: #dcfce7; color: #166534; }
@@ -748,12 +749,15 @@ const managementStyles = `
 
 
     .upload-zone {
-        border: 2px dashed #cbd5e1; border-radius: 24px; padding: 60px 40px; text-align: center;
-        background: white; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 40px;
-        box-shadow: var(--shadow);
+        border: 2px dashed var(--primary-light); border-radius: 24px; padding: 60px 40px; text-align: center;
+        background: #ffffff; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 40px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     }
-    .upload-zone:hover { border-color: var(--primary); background: #f8fbff; transform: scale(1.01); }
+    .upload-zone:hover { border-color: var(--accent); background: #f0f7ff; transform: scale(1.01); }
     .upload-prompt .icon { font-size: 48px; display: block; margin-bottom: 15px; }
-    .upload-prompt p { margin: 0 0 8px; font-size: 1.1rem; font-weight: 700; color: var(--primary-dark); }
-    .upload-prompt .sub { font-size: 0.9rem; color: var(--text-sub); }
+    .upload-prompt p { margin: 0 0 8px; font-size: 1.1rem; font-weight: 800; color: var(--primary-dark); }
+    .upload-prompt .sub { font-size: 0.9rem; color: var(--text-sub); font-weight: 600; }
+    
+    .btn-toggle.active { background: #dcfce7 !important; color: #166534 !important; border-color: #86efac !important; }
+
 `;

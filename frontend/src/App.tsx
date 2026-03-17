@@ -521,17 +521,17 @@ function App() {
           position: sticky; top: 12px; left: 12px; right: 12px; margin: 12px; 
           padding: 16px 24px; border-radius: 20px; z-index: 100;
           display: flex; justify-content: space-between; align-items: center;
-          background: var(--glass-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.05);
+          background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border: 2px solid var(--border);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
           animation: slideDown 0.6s ease-out;
         }
         @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
         .header h1 { font-size: 1.15rem; margin: 0; font-family: 'Outfit', sans-serif; color: var(--primary); }
         .connection-badge { 
-          background: white; padding: 6px 14px; border-radius: 30px; 
+          background: #f1f5f9; padding: 6px 14px; border-radius: 30px; 
           font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--success);
-          border: 1px solid #e2e8f0; letter-spacing: 0.5px;
+          border: 1.5px solid #cbd5e1; letter-spacing: 0.5px;
         }
         .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
         .pulse { animation: pulseAnim 2s infinite; }
@@ -552,7 +552,7 @@ function App() {
 
         .agenda-info-banner { 
           background: white; border-radius: 24px; padding: 25px; margin-bottom: 25px;
-          box-shadow: var(--shadow); border: 1px solid var(--border);
+          box-shadow: var(--shadow); border: 2.5px solid var(--border);
           transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
         }
         .agenda-info-banner:active { transform: scale(0.97); }
@@ -569,7 +569,7 @@ function App() {
 
         .link-card, .file-card { 
           background: white; padding: 20px 24px; border-radius: 24px; margin-bottom: 15px;
-          display: flex; align-items: center; border: 1px solid var(--border); box-shadow: var(--shadow);
+          display: flex; align-items: center; border: 2px solid var(--border); box-shadow: var(--shadow);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
         }
         .link-card:active, .file-card:active { transform: scale(0.97); background: #f8fafc; }
@@ -587,14 +587,14 @@ function App() {
 
         .bottom-nav { 
           position: fixed; bottom: 0; left: 0; right: 0;
-          background: var(--glass-bg); backdrop-filter: blur(20px); height: 80px; 
+          background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(25px); height: 85px; 
           display: flex; justify-content: space-around; align-items: center;
-          border-top: 1px solid var(--border); box-shadow: 0 -8px 30px rgba(0,0,0,0.05);
+          border-top: 2.5px solid var(--border); box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
           border-top-left-radius: 28px; border-top-right-radius: 28px; z-index: 1000;
-          padding: 0 10px;
+          padding: 0 10px 10px;
         }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; opacity: 0.45; transition: all 0.3s; height: 100%; border-radius: 20px; }
-        .nav-item.active { opacity: 1; color: var(--primary); }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; opacity: 0.6; transition: all 0.3s; height: 100%; border-radius: 20px; color: var(--text-sub); }
+        .nav-item.active { opacity: 1; color: var(--primary); font-weight: 900; }
         .nav-item.active .nav-icon { transform: translateY(-4px); }
         .nav-icon { font-size: 1.5rem; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .nav-item span:last-child { font-size: 0.72rem; font-weight: 800; }
