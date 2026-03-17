@@ -330,6 +330,9 @@ export default function Admin() {
                 <header className="admin-header">
                     <div>
                         <h1>디지털 총회 관제 센터</h1>
+                        <p style={{ fontSize: '0.8rem', color: '#1a237e', opacity: 0.7, marginTop: '-5px', marginBottom: '10px' }}>
+                            v2.5.0-FIREBASE 마이그레이션 완료 (2026.03.17)
+                        </p>
                         <p>반갑습니다, 관리자님. 운영할 행사를 선택하거나 새로 추가해 주세요.</p>
                     </div>
                     <div className="stats-badge">

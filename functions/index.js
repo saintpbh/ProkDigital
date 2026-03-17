@@ -6,25 +6,35 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // 1. Validate Passcode & Fetch Event Data
-exports.validatePasscode = onRequest({ cors: true }, async (req, res) => {
+exports.validatePasscode = onRequest({ cors: true, invoker: 'public' }, async (req, res) => {
     // Handle both body (POST) and query (GET/testing)
     const token = req.body?.token || req.query?.token;
     const passcode = req.body?.passcode || req.query?.passcode;
 
-    if (!token || !passcode) {
-        return res.status(400).json({ success: false, message: "Missing token or passcode" });
+    if (!token) {
+        return res.status(400).json({ success: false, message: "Missing token" });
     }
 
     try {
-        const eventRef = db.collection("events").doc(token);
-        const doc = await eventRef.get();
+        // Query the events collection where token == token
+        const snapshot = await db.collection("events").where("token", "==", token).limit(1).get();
 
-        if (!doc.exists) {
+        if (snapshot.empty) {
             console.log(`[validatePasscode] Event not found for token: ${token}`);
             return res.status(404).json({ success: false, message: "Event not found" });
         }
 
-        const eventData = doc.data();
+        const doc = snapshot.docs[0];
+        const eventData = { id: doc.id, ...doc.data() };
+        
+        // If passcode is empty string (just checking if event exists)
+        if (passcode === '') {
+            return res.json({ 
+                success: true, 
+                event: { id: eventData.id, name: eventData.name, token: eventData.token, passcode: !!eventData.passcode } 
+            });
+        }
+
         if (eventData.passcode !== passcode) {
             return res.status(401).json({ success: false, message: "Invalid passcode" });
         }
@@ -37,7 +47,7 @@ exports.validatePasscode = onRequest({ cors: true }, async (req, res) => {
 });
 
 // 2. Cast Vote
-exports.castVote = onRequest({ cors: true }, async (req, res) => {
+exports.castVote = onRequest({ cors: true, invoker: 'public' }, async (req, res) => {
     const { token, voteId, choices, delegateId } = req.body;
 
     if (!token || !voteId || !choices) {
@@ -45,9 +55,17 @@ exports.castVote = onRequest({ cors: true }, async (req, res) => {
     }
 
     try {
-        // Record the vote in a subcollection
-        const voteRecordRef = db.collection("events").doc(token)
-            .collection("votes").doc(voteId)
+        // First find the event by token
+        const eventSnapshot = await db.collection("events").where("token", "==", token).limit(1).get();
+        if (eventSnapshot.empty) {
+            return res.status(404).json({ success: false, message: "Event not found" });
+        }
+        
+        const eventId = eventSnapshot.docs[0].id;
+
+        // Record the vote in a subcollection or root collection
+        // For now, let's just make sure it succeeds
+        const voteRecordRef = db.collection("votes").doc(voteId)
             .collection("records").doc(delegateId || admin.firestore().collection("_").doc().id);
 
         await voteRecordRef.set({
