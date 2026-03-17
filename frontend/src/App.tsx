@@ -1,24 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useSSE } from './hooks/useSSE';
 import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
 import './App.css';
 
-// Dynamically determine the API base URL
-// Use relative path for API to leverage Vite proxy, or absolute if explicitly set
-const getInitialApiUrl = () => {
-    // Relative path '/api' is the most stable as it leverages the Vite proxy.
-    // This works seamlessly for both local network access and Cloudflare tunnels.
-    return ''; 
-};
-
-const DEFAULT_API_URL = getInitialApiUrl();
-
 function App() {
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [event, setEvent] = useState<any>(null);
-  const [isApiReady, setIsApiReady] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState('');
@@ -42,8 +29,11 @@ function App() {
     return id;
   });
 
-  // SSE Options with stable references
-  const sseOptions = useState(() => ({
+  // Firebase Sync (Primary and only data source)
+  const { 
+    files: displayFiles, 
+    links: displayLinks,
+  } = useFirebaseSync(token, {
     onAnnouncement: (msg: string) => {
       setAnnouncement(msg);
       if (msg) {
@@ -54,7 +44,6 @@ function App() {
         };
         setAnnouncementHistory(prev => {
           const updated = [newAnnouncement, ...prev];
-          // Get token from localStorage to avoid stale closure if needed, or similar
           const currentToken = window.location.pathname.startsWith('/join/') 
             ? window.location.pathname.split('/join/')[1] 
             : localStorage.getItem('eventToken');
@@ -63,67 +52,11 @@ function App() {
         });
       }
     },
-    onVoteStatusChange: (v: any) => {
-      console.log('Vote status changed via SSE:', v);
-      if (v.status === 'OPEN') {
-        setActiveVote((prev: any) => {
-          const options = v.options && v.options.length > 0 ? v.options : (prev?.options || []);
-          return { ...prev, ...v, options };
-        });
-        setVoteResults(null);
-        setHasVoted(false);
-      } else if (v.status === 'CLOSED') {
-        setActiveVote((prev: any) => prev ? { ...prev, ...v, status: 'CLOSED' } : v);
-      } else if (v.status === 'WAITING') {
-        setActiveVote(null);
-        setVoteResults(null);
-        setHasVoted(false);
-      }
-    },
-    onVoteDeleted: (id: number) => {
-      setActiveVote((prev: any) => {
-        if (prev?.id === id) return null;
-        return prev;
-      });
-      setVoteResults(null);
-      setHasVoted(false);
-    },
-    onVoteCountUpdate: (data: any) => {
-      setActiveVote((prev: any) => {
-        if (prev && (prev.id === data.id)) {
-          return { ...prev, voted_count: data.count };
-        }
-        return prev;
-      });
-    },
-    onVoteResults: (data: any) => {
-      setVoteResults(data.results);
-    },
-    onFileUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
-    onLinkUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
-    onNewFilePublished: (url: string) => {
-      console.log('[PDF] Pre-fetching new file:', url);
-      setPrefetchUrl(`${apiUrl}${url}`);
-      // Clear prefetch after 10s to allow reuse
-      setTimeout(() => setPrefetchUrl(null), 10000);
-    }
-  }))[0];
-
-  // 1. Firebase Sync (Primary for Real-time)
-  const { 
-    files: fbFiles, 
-    links: fbLinks,
-    setFiles: setFbFiles,
-    setLinks: setFbLinks
-  } = useFirebaseSync(token, {
-    onAnnouncement: (msg: string) => setAnnouncement(msg),
     onNewFilePublished: (url: string) => {
       console.log('[Firebase] Pre-fetching new file:', url);
-      setPrefetchUrl(`${apiUrl}${url}`);
+      setPrefetchUrl(url);
       setTimeout(() => setPrefetchUrl(null), 10000);
     },
-    onFileUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
-    onLinkUpdate: () => window.dispatchEvent(new CustomEvent('sse-refresh-data')),
     onVoteUpdate: (v: any) => {
       if (!v) {
         setActiveVote(null);
@@ -131,11 +64,9 @@ function App() {
         setHasVoted(false);
         return;
       }
-      console.log('[Firebase] Vote status changed:', v);
       if (v.status === 'OPEN') {
         setActiveVote((prev: any) => ({ ...prev, ...v }));
         setVoteResults(v.results || null);
-        // Only reset hasVoted if it's a completely new vote
         if (activeVote?.id !== v.id) setHasVoted(false);
       } else if (v.status === 'CLOSED') {
         setActiveVote((prev: any) => prev ? { ...prev, ...v, status: 'CLOSED' } : v);
@@ -144,119 +75,51 @@ function App() {
     }
   });
 
-  const isFirebaseHost = window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app');
-
-  // 2. Legacy SSE (Secondary/Fallback) - Only used if Firebase not connected
-  // Note: We keep this for now to ensure NO regression during migration
-  const memoSseUrl = (event && event.token && !isFirebaseHost) 
-    ? `${apiUrl}/api/stream?token=${event.token}` 
-    : (event && !isFirebaseHost ? `${apiUrl}/api/stream` : null);
-
-  const { 
-    files: sseFiles, 
-    links: sseLinks, 
-    connectionCount, 
-    connectionStatus, 
-    errorCount 
-  } = useSSE(memoSseUrl, sseOptions);
-
-  // Derived state: Favor Firebase data if available, otherwise use SSE/Local
-  const displayFiles = fbFiles.length > 0 ? fbFiles : sseFiles;
-  const displayLinks = fbLinks.length > 0 ? fbLinks : sseLinks;
-
+  // Initialize: extract token from URL path and load event
   useEffect(() => {
-    // If on localhost, verify if we should be using a different IP from the backend
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    if (isLocal && !isFirebaseHost) {
-      fetch('http://localhost:3000/api/system/ip')
-        .then(r => {
-          if (!r.ok) throw new Error('Failed to fetch IP');
-          return r.json();
-        })
-        .then(data => {
-          if (data && data.ip && data.ip !== '127.0.0.1') {
-            console.log('Switching to network IP:', data.ip);
-            setApiUrl(`http://${data.ip}:3000`);
-          }
-          setIsApiReady(true);
-        })
-        .catch(() => {
-          // It's expected to fail if the backend isn't running locally.
-          setIsApiReady(true);
-        });
-    } else {
-      setIsApiReady(true);
-    }
-  }, []);
-  useEffect(() => {
-    if (!isApiReady) return;
-
     const eventToken = window.location.pathname.startsWith('/join/') 
       ? window.location.pathname.split('/join/')[1] 
       : localStorage.getItem('eventToken');
     if (eventToken) {
       setToken(eventToken);
-      fetch(`${apiUrl}/api/events/token/${eventToken}`, {
-        headers: { 'bypass-tunnel-reminder': 'true' }
+      // Load announcement history from localStorage
+      const savedHistory = localStorage.getItem(`announcements_${eventToken}`);
+      if (savedHistory) {
+        try {
+          setAnnouncementHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error('Failed to load announcement history', e);
+        }
+      }
+      // Try Cloud Function to validate token and load event data
+      fetch('/api/v2/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: eventToken, passcode: '' }),
       })
-        .then(res => {
-          if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-          return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
-          setEvent(data);
-          if (data.current_announcement) {
-            setAnnouncement(data.current_announcement);
-          }
-          // Load history from localStorage
-          const savedHistory = localStorage.getItem(`announcements_${eventToken}`);
-          if (savedHistory) {
-            try {
-              setAnnouncementHistory(JSON.parse(savedHistory));
-            } catch (e) {
-              console.error('Failed to load announcement history', e);
+          if (data.success && data.event) {
+            setEvent(data.event);
+            if (!data.event.passcode) {
+              setIsLoggedIn(true);
             }
+          } else if (!data.success && data.message === 'Invalid passcode') {
+            // Event exists but requires passcode → show login screen
+            setEvent({ token: eventToken, name: '행사', passcode: true });
+          } else {
+            setError('행사를 찾을 수 없습니다.');
           }
-          // Fetch initial votes for this event
-          fetch(`${apiUrl}/api/votes?eventId=${data.id}`, {
-            headers: { 'bypass-tunnel-reminder': 'true' }
-          })
-            .then(r => r.json())
-            .then(votesList => {
-              const active = votesList.find((v: any) => v.status === 'OPEN');
-              if (active) setActiveVote(active);
-            });
         })
         .catch(err => {
-          console.error('Failed to fetch event', err);
-          setError(`행사 정보를 가져오는 데 실패했습니다: ${err.message}`);
-        })
-        .finally(() => {
-            // Once we have basic event info, load its metadata (files, links)
-            // This is safer to do here than in a separate useEffect to avoid race
+          console.error('Failed to load event:', err);
+          setError('서버와 통신할 수 없습니다.');
         });
     }
-  }, [isApiReady, apiUrl]);
-
-  // Secondary effect to fetch event data once the event object is set
-  useEffect(() => {
-    if (event?.id) {
-        fetchEventData(event.id);
-    }
-  }, [event?.id]);
-
-  useEffect(() => {
-    const handler = () => {
-        if (event?.id) fetchEventData(event.id);
-    };
-    window.addEventListener('sse-refresh-data', handler);
-    return () => window.removeEventListener('sse-refresh-data', handler);
-  }, [event?.id]);
+  }, []);
 
   const handleLogin = async (passcode: string) => {
     try {
-      // 1. Try Firebase Cloud Function first (Serverless)
       const res = await fetch('/api/v2/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -271,34 +134,16 @@ function App() {
           return;
         }
       }
-    } catch (e) {
-      console.warn('Cloud login failed, falling back to local backend:', e);
-    }
-
-    // 2. Fallback to Local Backend
-    if (isFirebaseHost) {
-      setLoginError('클라우드 인증 오류.');
-      return;
-    }
-    
-    const res = await fetch(`${apiUrl}/api/events/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, passcode }),
-    });
-    const isValid = await res.json();
-    if (isValid) {
-      setIsLoggedIn(true);
-      fetchEventData();
-    } else {
       setLoginError('암호가 올바르지 않습니다.');
+    } catch (e) {
+      console.error('Login failed:', e);
+      setLoginError('서버 연결 오류가 발생했습니다.');
     }
   };
 
   const castVote = async (optionId: number) => {
     if (!activeVote || hasVoted) return;
     try {
-      // 1. Try Firebase Cloud Function (Serverless)
       const res = await fetch('/api/v2/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -312,53 +157,14 @@ function App() {
 
       if (res.ok) {
         setHasVoted(true);
-        return;
+      } else {
+        const data = await res.json();
+        alert(data.message || '투표 처리 중 오류가 발생했습니다.');
       }
     } catch (e) {
-      console.warn('Cloud vote failed, falling back to local backend:', e);
-    }
-
-    // 2. Fallback to Local Backend
-    if (isFirebaseHost) {
-      alert('서버와 통신할 수 없습니다 (클라우드 오류).');
-      return;
-    }
-
-    try {
-      const res = await fetch(`${apiUrl}/api/votes/${activeVote.id}/cast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionId, voterToken: voterId }),
-      });
-      if (res.ok) {
-        setHasVoted(true);
-      } else {
-        const errorData = await res.json();
-        alert(errorData.message || '투표 처리 중 오류가 발생했습니다.');
-        if (res.status === 409) setHasVoted(true); // Already voted
-      }
-    } catch (err) {
-      console.error('Vote failed', err);
+      console.error('Vote failed:', e);
       alert('서버와 통신할 수 없습니다.');
     }
-  };
-
-  const fetchEventData = (eventId?: number) => {
-    const targetId = eventId || event?.id;
-    if (!targetId || isFirebaseHost) return;
-    
-    fetch(`${apiUrl}/api/events/${targetId}`, {
-      headers: { 'bypass-tunnel-reminder': 'true' }
-    })
-      .then(res => res.json())
-      .then(data => {
-        const publicFiles = data.files.filter((f: any) => f.is_public);
-        const publicLinks = data.links.filter((l: any) => l.is_public);
-        
-        // Sync with both state handlers
-        setFbFiles(publicFiles);
-        setFbLinks(publicLinks);
-      });
   };
 
   if (!token) return (
@@ -403,7 +209,7 @@ function App() {
       <header className="header">
         <h1>{event.name}</h1>
         <div className="connection-badge">
-          📡 실시간 연결 중 ({connectionCount}명 접속)
+          ☁️ Firebase 실시간 연결
         </div>
       </header>
       <main className="container">
@@ -417,7 +223,7 @@ function App() {
           </div>
         )}
 
-        {(connectionStatus === 'error' || errorCount > 2) && (
+        {false && (
           <div className="connection-error-banner">
             <div className="error-content">
               <span className="error-icon">⚠️</span>
@@ -486,7 +292,7 @@ function App() {
                     PDF · {file.file_size} · {new Date(file.published_at).toLocaleTimeString()} 공개
                   </div>
                 </div>
-                <button className="btn-view" onClick={() => setViewerUrl(`${apiUrl}${file.url}`)}>
+                <button className="btn-view" onClick={() => setViewerUrl(file.url)}>
                   열람
                 </button>
               </div>
@@ -723,13 +529,13 @@ function App() {
         .link-card .url-hint { font-size: 11px; color: #64b5f6; }
 
         .connection-badge {
-          background: ${connectionStatus === 'connected' ? 'rgba(76, 175, 80, 0.2)' : connectionStatus === 'error' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(255,255,255,0.15)'};
+          background: rgba(76, 175, 80, 0.2);
           padding: 6px 12px;
           border-radius: 20px;
           font-size: 0.85rem;
           display: inline-block;
           margin-top: 10px;
-          border: 1px solid ${connectionStatus === 'connected' ? '#4caf50' : connectionStatus === 'error' ? '#f44336' : 'transparent'};
+          border: 1px solid #4caf50;
         }
         .connection-error-banner {
           background: #ffebee;
