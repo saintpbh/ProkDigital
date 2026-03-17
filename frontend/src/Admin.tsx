@@ -20,6 +20,7 @@ export default function Admin() {
     // File upload state
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isWarmingUp, setIsWarmingUp] = useState<string | null>(null);
 
     // Restore saved view mode and active event on mount
     useEffect(() => {
@@ -173,7 +174,8 @@ export default function Admin() {
         setUploadProgress(0);
 
         const storageRef = ref(storage, `events/${activeEvent.id}/files/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        const metadata = { cacheControl: 'public, max-age=31536000' };
+        const uploadTask = uploadBytesResumable(storageRef, file, metadata);
 
         uploadTask.on('state_changed',
             (snapshot) => {
@@ -395,8 +397,24 @@ export default function Admin() {
     }
 
     // ==========================================
-    // Management View
+    // Management View Helpers
     // ==========================================
+    const warmupFile = async (url: string, fileId: string) => {
+        setIsWarmingUp(fileId);
+        try {
+            // Perform 5 concurrent fetches to "pull" the file into local edge nodes
+            const warmups = Array.from({ length: 5 }).map(() => 
+                fetch(url, { mode: 'no-cors', cache: 'reload' })
+            );
+            await Promise.all(warmups);
+            alert('🔥 CDN 웜업 완료! 이제 모든 대의원이 순식간에 다운로드할 수 있습니다.');
+        } catch (error) {
+            console.error('Warmup failed:', error);
+        } finally {
+            setIsWarmingUp(null);
+        }
+    };
+
     const joinUrl = getJoinUrl();
 
     return (
@@ -546,8 +564,21 @@ export default function Admin() {
                                             <td>PDF</td>
                                             <td><span className={`tag ${f.is_public ? 'on' : 'off'}`}>{f.is_public ? '공유중' : '중단'}</span></td>
                                             <td>
-                                                <button onClick={() => renameFile(f.id, f.title)}>✏️</button>
-                                                <button onClick={() => toggleFile(f.id, f.is_public)}>{f.is_public ? '중지' : '공개'}</button>
+                                                <button onClick={() => renameFile(f.id, f.title)} title="이름 변경">✏️</button>
+                                                <button 
+                                                    onClick={() => toggleFile(f.id, f.is_public)}
+                                                    className={f.is_public ? 'active' : ''}
+                                                >
+                                                    {f.is_public ? '중지' : '공개'}
+                                                </button>
+                                                <button 
+                                                    className={`btn-warmup ${isWarmingUp === f.id ? 'pulsing' : ''}`}
+                                                    onClick={() => warmupFile(f.url, f.id)}
+                                                    disabled={isWarmingUp === f.id}
+                                                    title="CDN 웜업 (에지 서버에 파일 미리 복사)"
+                                                >
+                                                    {isWarmingUp === f.id ? '⏳' : '🔥 웜업'}
+                                                </button>
                                                 <button className="del" onClick={() => deleteFile(f.id, f.storage_path)}>삭제</button>
                                             </td>
                                         </tr>
@@ -706,6 +737,15 @@ const managementStyles = `
     .btn-group button:hover { border-color: var(--primary); background: #f8fafc; }
     .btn-group button.del { color: var(--error); border-color: #fee2e2; }
     .btn-group button.del:hover { background: #fee2e2; }
+
+    .btn-warmup { 
+        background: #fff7ed !important; color: #ea580c !important; border: 1px solid #fdba74 !important; 
+        padding: 6px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-right: 8px;
+    }
+    .btn-warmup:hover { background: #ffedd5 !important; }
+    .btn-warmup.pulsing { animation: pulseOrange 1s infinite alternate; }
+    @keyframes pulseOrange { from { opacity: 0.6; } to { opacity: 1; } }
+
 
     .upload-zone {
         border: 2px dashed #cbd5e1; border-radius: 24px; padding: 60px 40px; text-align: center;
