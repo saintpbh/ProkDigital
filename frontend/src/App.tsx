@@ -144,11 +144,13 @@ function App() {
     }
   });
 
+  const isFirebaseHost = window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app');
+
   // 2. Legacy SSE (Secondary/Fallback) - Only used if Firebase not connected
   // Note: We keep this for now to ensure NO regression during migration
-  const memoSseUrl = (event && event.token) 
+  const memoSseUrl = (event && event.token && !isFirebaseHost) 
     ? `${apiUrl}/api/stream?token=${event.token}` 
-    : (event ? `${apiUrl}/api/stream` : null);
+    : (event && !isFirebaseHost ? `${apiUrl}/api/stream` : null);
 
   const { 
     files: sseFiles, 
@@ -165,9 +167,8 @@ function App() {
   useEffect(() => {
     // If on localhost, verify if we should be using a different IP from the backend
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const isFirebase = window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app');
 
-    if (isLocal && !isFirebase) {
+    if (isLocal && !isFirebaseHost) {
       fetch('http://localhost:3000/api/system/ip')
         .then(r => {
           if (!r.ok) throw new Error('Failed to fetch IP');
@@ -180,8 +181,8 @@ function App() {
           }
           setIsApiReady(true);
         })
-        .catch((err) => {
-          console.warn('Could not fetch dynamic IP, using default (localhost).', err);
+        .catch(() => {
+          // It's expected to fail if the backend isn't running locally.
           setIsApiReady(true);
         });
     } else {
@@ -275,6 +276,11 @@ function App() {
     }
 
     // 2. Fallback to Local Backend
+    if (isFirebaseHost) {
+      setLoginError('클라우드 인증 오류.');
+      return;
+    }
+    
     const res = await fetch(`${apiUrl}/api/events/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -313,6 +319,11 @@ function App() {
     }
 
     // 2. Fallback to Local Backend
+    if (isFirebaseHost) {
+      alert('서버와 통신할 수 없습니다 (클라우드 오류).');
+      return;
+    }
+
     try {
       const res = await fetch(`${apiUrl}/api/votes/${activeVote.id}/cast`, {
         method: 'POST',
@@ -334,7 +345,8 @@ function App() {
 
   const fetchEventData = (eventId?: number) => {
     const targetId = eventId || event?.id;
-    if (!targetId) return;
+    if (!targetId || isFirebaseHost) return;
+    
     fetch(`${apiUrl}/api/events/${targetId}`, {
       headers: { 'bypass-tunnel-reminder': 'true' }
     })

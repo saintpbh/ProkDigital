@@ -18,6 +18,7 @@ const getApiBaseUrl = () => {
 };
 
 const LOCAL_CONTROL_API = getApiBaseUrl();
+const isExternalEnv = window.location.hostname.includes('firebase') || window.location.hostname.includes('web.app');
 
 type ViewMode = 'dashboard' | 'management';
 
@@ -35,9 +36,11 @@ export default function Admin() {
     const [publicJoinUrl, setPublicJoinUrl] = useState<string>('');
     const [isTunneling, setIsTunneling] = useState(false);
     
-    const sseUrl = activeEvent?.token 
-        ? `${LOCAL_CONTROL_API}/api/stream?token=${activeEvent.token}`
-        : `${LOCAL_CONTROL_API}/api/stream`;
+    const sseUrl = isExternalEnv 
+        ? null 
+        : (activeEvent?.token 
+            ? `${LOCAL_CONTROL_API}/api/stream?token=${activeEvent.token}`
+            : `${LOCAL_CONTROL_API}/api/stream`);
 
     // SSE Options - stable reference to avoid connection flapping
     const sseOptions = useState(() => ({
@@ -74,6 +77,7 @@ export default function Admin() {
     }, [viewMode, activeEvent]);
 
     useEffect(() => {
+        if (isExternalEnv) return;
         const checkTunnelStatus = async () => {
             try {
                 const res = await fetch(`${LOCAL_CONTROL_API}/api/system/tunnel/status`, { 
@@ -96,6 +100,10 @@ export default function Admin() {
     }, [activeEvent?.token]);
 
     const fetchEvents = () => {
+        if (isExternalEnv) {
+            console.log('Running externally, skipping local event fetch.');
+            return;
+        }
         fetch(`${LOCAL_CONTROL_API}/api/events`, {
             headers: { 'bypass-tunnel-reminder': 'true' }
         })
@@ -148,6 +156,12 @@ export default function Admin() {
 
     useEffect(() => {
         let isMounted = true;
+        
+        if (isExternalEnv) {
+            console.log('Running externally, skipping local IP detection.');
+            return;
+        }
+        
         // Fetch current service IP from local backend
         fetch(`${LOCAL_CONTROL_API}/api/system/ip`, {
             headers: { 'bypass-tunnel-reminder': 'true' }
@@ -162,12 +176,7 @@ export default function Admin() {
                 }
             })
             .catch(err => {
-                // Suppress verbose error if running externally since it's expected
-                if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                    console.log('Running externally, skipping local IP detection.');
-                } else {
-                    console.warn('Failed to detect service IP (Local backend might be offline).', err.message);
-                }
+                console.warn('Failed to detect service IP (Local backend might be offline).', err.message);
                 if (isMounted) setServiceIp('127.0.0.1');
             });
         
