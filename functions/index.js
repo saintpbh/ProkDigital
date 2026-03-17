@@ -9,7 +9,8 @@ const db = admin.firestore();
 exports.validatePasscode = onRequest({ cors: true, invoker: 'public' }, async (req, res) => {
     // Handle both body (POST) and query (GET/testing)
     const token = req.body?.token || req.query?.token;
-    const passcode = req.body?.passcode || req.query?.passcode;
+    // Use nullish coalescing to allow empty string
+    const passcode = (req.body?.passcode !== undefined) ? req.body.passcode : req.query?.passcode;
 
     if (!token) {
         return res.status(400).json({ success: false, message: "Missing token" });

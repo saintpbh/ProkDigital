@@ -9,10 +9,10 @@ import {
 import { db } from '../lib/firebase';
 
 export interface EventData {
-  id: number;
-  title: string;
+  id: string;
+  name: string;
   token: string;
-  is_active: boolean;
+  passcode?: string | boolean;
   current_announcement?: string;
   files?: any[];
   links?: any[];
@@ -31,7 +31,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
       if (!snapshot.empty) {
         const eventDoc = snapshot.docs[0];
-        const data = { id: parseInt(eventDoc.id), ...eventDoc.data() } as EventData;
+        const data = { id: eventDoc.id, ...eventDoc.data() } as EventData;
         onUpdate(data);
       }
     }, (error) => {
@@ -42,10 +42,10 @@ export const firebaseService = {
   /**
    * Listen to public files for an event
    */
-  subscribeToFiles: (eventId: number, onUpdate: (files: any[]) => void) => {
+  subscribeToFiles: (eventId: string, onUpdate: (files: any[]) => void) => {
     const q = query(
       collection(db, 'files'), 
-      where('event_id', '==', eventId),
+      where('eventId', '==', eventId),
       where('is_public', '==', true)
     );
     
@@ -64,10 +64,10 @@ export const firebaseService = {
   /**
    * Listen to public links for an event
    */
-  subscribeToLinks: (eventId: number, onUpdate: (links: any[]) => void) => {
+  subscribeToLinks: (eventId: string, onUpdate: (links: any[]) => void) => {
     const q = query(
       collection(db, 'links'), 
-      where('event_id', '==', eventId),
+      where('eventId', '==', eventId),
       where('is_public', '==', true)
     );
     
@@ -80,10 +80,10 @@ export const firebaseService = {
   /**
    * Listen to active votes for an event
    */
-  subscribeToVotes: (eventId: number, onUpdate: (vote: any) => void) => {
+  subscribeToVotes: (eventId: string, onUpdate: (vote: any) => void) => {
     const q = query(
       collection(db, 'votes'), 
-      where('event_id', '==', eventId),
+      where('eventId', '==', eventId),
       where('status', '==', 'OPEN')
     );
     

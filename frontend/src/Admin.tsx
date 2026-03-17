@@ -59,7 +59,7 @@ export default function Admin() {
     // Listen to files for active event (real-time)
     useEffect(() => {
         if (!activeEvent) return;
-        const q = query(collection(db, 'files'), where('event_id', '==', activeEvent.id));
+        const q = query(collection(db, 'files'), where('eventId', '==', activeEvent.id));
         const unsub = onSnapshot(q, (snapshot) => {
             const files = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setAllFiles(files);
@@ -70,7 +70,7 @@ export default function Admin() {
     // Listen to links for active event (real-time)
     useEffect(() => {
         if (!activeEvent) return;
-        const q = query(collection(db, 'links'), where('event_id', '==', activeEvent.id));
+        const q = query(collection(db, 'links'), where('eventId', '==', activeEvent.id));
         const unsub = onSnapshot(q, (snapshot) => {
             const links = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setAllLinks(links);
@@ -81,7 +81,7 @@ export default function Admin() {
     // Listen to votes for active event (real-time)
     useEffect(() => {
         if (!activeEvent) return;
-        const q = query(collection(db, 'votes'), where('event_id', '==', activeEvent.id));
+        const q = query(collection(db, 'votes'), where('eventId', '==', activeEvent.id));
         const unsub = onSnapshot(q, (snapshot) => {
             const voteList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setVotes(voteList);
@@ -191,7 +191,7 @@ export default function Admin() {
                 
                 // Store file metadata in Firestore
                 await addDoc(collection(db, 'files'), {
-                    event_id: activeEvent.id,
+                    eventId: activeEvent.id,
                     title: file.name.replace('.pdf', ''),
                     url: downloadURL,
                     storage_path: storageRef.fullPath,
@@ -243,7 +243,7 @@ export default function Admin() {
         const url = prompt('URL 주소를 입력하세요');
         if (!title || !url) return;
         await addDoc(collection(db, 'links'), {
-            event_id: activeEvent.id,
+            eventId: activeEvent.id,
             title,
             url,
             is_public: true,
@@ -284,7 +284,7 @@ export default function Admin() {
         }
 
         await addDoc(collection(db, 'votes'), {
-            event_id: activeEvent.id,
+            eventId: activeEvent.id,
             question,
             type,
             options: options.map((label, i) => ({ id: i + 1, label })),
