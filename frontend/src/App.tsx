@@ -206,10 +206,11 @@ function App() {
   return (
     <div className="app">
       <PWAInstallGuide />
-      <header className="header">
+      <header className="header glass-pill">
         <h1>{event.name}</h1>
         <div className="connection-badge">
-          ☁️ Firebase 실시간 연결
+          <span className="dot pulse"></span>
+          REAL-TIME
         </div>
       </header>
       <main className="container">
@@ -501,190 +502,129 @@ function App() {
       </nav>
 
       <style>{`
-        .loading-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin-bottom: 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        :root { 
+          --primary: #1a237e; 
+          --primary-light: #534bae; 
+          --primary-dark: #000051;
+          --accent: #448aff; 
+          --success: #00c853; 
+          --error: #ff5252;
+          --bg: #f8fafc; 
+          --shadow: 0 10px 30px rgba(0,0,0,0.05);
+          --border: rgba(0,0,0,0.08);
+          --glass-bg: rgba(255, 255, 255, 0.7);
+        }
         
-        .announcement-overlay {
-          background: #fff9c4;
-          border: 2px solid #fbc02d;
-          border-radius: 12px;
-          margin-bottom: 20px;
-          padding: 15px;
-          display: flex;
-          animation: slideDown 0.3s ease-out;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .announcement-content { display: flex; align-items: center; width: 100%; gap: 12px; }
-        .announcement-icon { font-size: 24px; }
-        .announcement-text { flex: 1; font-weight: bold; color: #827717; line-height: 1.4; }
-        .btn-close-announcement { background: none; border: 1px solid #fbc02d; color: #827717; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
-
-        .link-section { margin-bottom: 25px; }
-        .link-section h3 { font-size: 1rem; color: #666; margin-bottom: 12px; }
-        .link-card { background: #e3f2fd; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 15px; cursor: pointer; border: 1px solid #bbdefb; }
-        .link-card .icon { font-size: 20px; }
-        .link-card .title { font-weight: bold; color: #1565c0; }
-        .link-card .url-hint { font-size: 11px; color: #64b5f6; }
-
-        .connection-badge {
-          background: rgba(76, 175, 80, 0.2);
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 0.85rem;
-          display: inline-block;
-          margin-top: 10px;
-          border: 1px solid #4caf50;
-        }
-        .connection-error-banner {
-          background: #ffebee;
-          border: 2px solid #f44336;
-          border-radius: 12px;
-          margin-bottom: 20px;
-          padding: 15px;
-          animation: shake 0.5s ease-in-out;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
-        }
-        .error-content { display: flex; align-items: center; gap: 12px; color: #b71c1c; }
-        .error-text { flex: 1; font-size: 0.9rem; line-height: 1.4; }
-        .btn-retry { background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .agenda-info {
-          background: white;
-          border-radius: 12px;
-          padding: 15px;
-          margin-bottom: 20px;
-          border-left: 4px solid var(--primary);
-        }
-        .bottom-nav {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          background: white;
-          display: flex;
-          height: 60px;
-          border-top: 1px solid #eee;
-          justify-content: space-around;
-          align-items: center;
-          z-index: 100;
-        }
-        .agenda-info-banner {
-          background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px;
-          border-left: 4px solid var(--primary); transition: background 0.2s; cursor: pointer;
-        }
-        .agenda-info-banner.is-live { border-left-color: #f44336; background: #fffde7; }
-        .agenda-info-banner.is-live:active { background: #fff9c4; }
-
-        .live-vote-ticker { display: flex; align-items: center; gap: 10px; color: #f44336; font-size: 0.95rem; font-weight: bold; width: 100%; }
-        .announcement-ticker { color: #555; font-size: 0.9rem; }
-
-        .vote-tab-content { padding: 20px; text-align: center; height: calc(100vh - 180px); display: flex; flex-direction: column; justify-content: center; }
-        .active-vote-screen h2 { margin: 15px 0; font-size: 1.8rem; }
-        .btn-option.large { width: 100%; margin: 8px 0; padding: 20px; font-size: 1.2rem; }
+        .app { min-height: 100vh; background: var(--bg); color: #1e293b; padding-bottom: 90px; }
         
-        .empty-vote .icon { font-size: 4rem; opacity: 0.2; margin-bottom: 20px; }
-        .empty-vote h3 { color: #888; margin-bottom: 10px; }
-        .empty-vote p { color: #bbb; }
-
-        .voting-notification-overlay, .results-notification-overlay {
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
-          display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
-        }
-        .notification-card {
-          background: white; width: 100%; max-width: 320px; border-radius: 24px; padding: 30px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          text-align: center;
-        }
-        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .notification-card h3 { margin-bottom: 10px; }
-        .btn-jump-vote {
-          width: 100%; background: #1a237e; color: white; border: none; padding: 15px;
-          border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 20px;
-          box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);
-        }
-        .btn-dismiss { background: none; border: none; color: #888; margin-top: 15px; cursor: pointer; }
-
-        .live-vote-ticker { display: flex; align-items: center; gap: 10px; color: #f44336; font-size: 0.9rem; }
-        .dot { width: 8px; height: 8px; background: #f44336; border-radius: 50%; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
-        .btn-go-vote-mini { border: 1px solid #f44336; color: #f44336; background: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; margin-left: auto; cursor: pointer; }
-
-        .voted-confirmation { padding: 30px 0; }
-        .check-icon { font-size: 4rem; color: #4caf50; margin-bottom: 20px; }
-        .vote-stats-mini { margin-top: 20px; color: #888; font-size: 0.8rem; }
-
-        .results-display.card { text-align: left; padding: 20px; margin-top: 20px; border: 1px solid #eee; border-radius: 16px; }
-        .result-item { margin-bottom: 15px; }
-        .result-info { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; }
-        .progress-bar { background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden; }
-        .progress-fill { background: #1a237e; height: 100%; }
-
-        .info-tab-content { padding: 10px 0; text-align: left; }
-        .tab-desc { color: #888; font-size: 0.9rem; margin-bottom: 20px; text-align: center; }
-        .announcement-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 40px; }
-        .announcement-item-card { 
-          background: white; border-radius: 12px; padding: 15px; 
-          box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee;
-          cursor: pointer; transition: transform 0.1s;
-        }
-        .announcement-item-card:active { transform: scale(0.98); background: #fafafa; }
-        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .item-icon { font-size: 1.2rem; }
-        .item-time { font-size: 0.8rem; color: #aaa; }
-        .item-body { font-size: 0.95rem; color: #333; line-height: 1.4; word-break: break-all; }
-        .item-footer { margin-top: 8px; font-size: 0.8rem; color: var(--primary); text-align: right; font-weight: bold; }
-
-        .detail-overlay {
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-          display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px;
-        }
-        .detail-card {
-          background: white; width: 100%; max-width: 400px; border-radius: 20px; 
-          box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out;
-        }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .detail-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .detail-header h3 { margin: 0; font-size: 1.1rem; color: #333; }
-        .btn-close { background: none; border: none; font-size: 1.5rem; color: #999; cursor: pointer; }
-        .detail-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
-        .detail-time { font-size: 0.85rem; color: #888; margin-bottom: 15px; }
-        .detail-message { font-size: 1.05rem; color: #222; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
-        .btn-confirm { 
-          width: calc(100% - 40px); margin: 0 20px 20px; background: var(--primary); 
-          color: white; border: none; padding: 14px; border-radius: 12px; 
-          font-weight: bold; cursor: pointer; font-size: 1rem;
-        }
-
-        .pdf-viewer-overlay {
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-          display: flex; align-items: center; justify-content: center; z-index: 3000;
-        }
-        .pdf-viewer-container {
-          background: white; width: 95%; height: 90%; border-radius: 20px;
-          display: flex; flex-direction: column; overflow: hidden;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-        }
-        .pdf-viewer-header {
-          padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #eee;
+        .header { 
+          position: sticky; top: 12px; left: 12px; right: 12px; margin: 12px; 
+          padding: 16px 24px; border-radius: 20px; z-index: 100;
           display: flex; justify-content: space-between; align-items: center;
+          background: var(--glass-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.05);
+          animation: slideDown 0.6s ease-out;
         }
-        .pdf-viewer-header h3 { margin: 0; font-size: 1rem; color: #333; }
-        .btn-close-viewer { 
-          background: #333; color: white; border: none; padding: 6px 15px; 
-          border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold;
+        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .header h1 { font-size: 1.15rem; margin: 0; font-family: 'Outfit', sans-serif; color: var(--primary); }
+        .connection-badge { 
+          background: white; padding: 6px 14px; border-radius: 30px; 
+          font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--success);
+          border: 1px solid #e2e8f0; letter-spacing: 0.5px;
         }
-        .pdf-viewer-body { flex: 1; background: #525659; position: relative; }
-        .pdf-viewer-footer { padding: 10px; background: #f8f9fa; border-top: 1px solid #eee; text-align: center; }
-        .btn-full-screen { background: none; border: 1px solid #ccc; color: #666; padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+        .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
+        .pulse { animation: pulseAnim 2s infinite; }
+        @keyframes pulseAnim { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
+
+        .container { padding: 90px 20px 20px; max-width: 600px; margin: 0 auto; }
+
+        .announcement-overlay {
+          background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color: white; border-radius: 24px;
+          padding: 24px; margin-bottom: 25px; display: flex; position: relative;
+          box-shadow: 0 15px 35px rgba(26, 35, 126, 0.25); animation: fadeInUp 0.5s ease-out;
+        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .announcement-icon { font-size: 1.5rem; margin-right: 15px; }
+        .announcement-text { flex: 1; font-weight: 500; font-size: 1.05rem; line-height: 1.5; }
+        .btn-close-announcement { background: rgba(255,255,255,0.15); border: none; color: white; padding: 6px 14px; border-radius: 12px; font-size: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.2s; }
+        .btn-close-announcement:hover { background: rgba(255,255,255,0.25); }
+
+        .agenda-info-banner { 
+          background: white; border-radius: 24px; padding: 25px; margin-bottom: 25px;
+          box-shadow: var(--shadow); border: 1px solid var(--border);
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
+        }
+        .agenda-info-banner:active { transform: scale(0.97); }
+        .agenda-info-banner.is-live { 
+          background: linear-gradient(135deg, #fff1f2 0%, #ffffff 100%); 
+          border-color: #fca5a5;
+        }
+        .live-vote-ticker { display: flex; flex-direction: column; gap: 12px; color: var(--error); font-weight: 800; text-align: center; }
+        .btn-go-vote-mini { 
+          background: var(--error); color: white; border: none; padding: 12px 20px; border-radius: 14px; 
+          font-weight: 800; margin-top: 10px; font-size: 0.9rem; letter-spacing: -0.5px;
+          box-shadow: 0 4px 12px rgba(255, 82, 82, 0.2);
+        }
+
+        .link-card, .file-card { 
+          background: white; padding: 20px 24px; border-radius: 24px; margin-bottom: 15px;
+          display: flex; align-items: center; border: 1px solid var(--border); box-shadow: var(--shadow);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
+        }
+        .link-card:active, .file-card:active { transform: scale(0.97); background: #f8fafc; }
+        .link-info, .file-info { flex: 1; }
+        .title { font-weight: 700; font-size: 1.05rem; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .meta, .url-hint { font-size: 0.8rem; color: #64748b; font-weight: 500; }
+        .btn-view { 
+          background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 14px; 
+          font-weight: 700; font-size: 0.9rem; box-shadow: 0 4px 10px rgba(26, 35, 126, 0.15);
+        }
+        .badge-new { 
+          background: var(--accent); color: white; font-size: 9px; font-weight: 800; 
+          padding: 2px 8px; border-radius: 6px; text-transform: uppercase;
+        }
+
+        .bottom-nav { 
+          position: fixed; bottom: 0; left: 0; right: 0;
+          background: var(--glass-bg); backdrop-filter: blur(20px); height: 80px; 
+          display: flex; justify-content: space-around; align-items: center;
+          border-top: 1px solid var(--border); box-shadow: 0 -8px 30px rgba(0,0,0,0.05);
+          border-top-left-radius: 28px; border-top-right-radius: 28px; z-index: 1000;
+          padding: 0 10px;
+        }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; opacity: 0.45; transition: all 0.3s; height: 100%; border-radius: 20px; }
+        .nav-item.active { opacity: 1; color: var(--primary); }
+        .nav-item.active .nav-icon { transform: translateY(-4px); }
+        .nav-icon { font-size: 1.5rem; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .nav-item span:last-child { font-size: 0.72rem; font-weight: 800; }
+        .nav-item.focus::after { content: ''; position: absolute; top: 10px; right: 25%; width: 10px; height: 10px; background: var(--error); border-radius: 50%; border: 2px solid white; animation: pulseAnim 1.5s infinite; }
+
+        /* Overlays & Modals */
+        .pdf-viewer-overlay, .detail-overlay, .voting-notification-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(12px);
+          z-index: 2000; display: flex; align-items: flex-end; justify-content: center;
+        }
+        .pdf-viewer-container, .detail-card, .notification-card {
+          width: 100%; max-width: 500px; background: white; border-radius: 32px 32px 0 0; 
+          overflow: hidden; box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.15);
+          animation: slideUpModal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+        }
+        @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .notification-card { padding: 40px 30px; text-align: center; border-radius: 32px; margin: 20px; width: calc(100% - 40px); }
+
+        .vote-tab-content { height: calc(100vh - 220px); justify-content: center; display: flex; flex-direction: column; text-align: center; padding: 20px; }
+        .btn-option.large { 
+          width: 100%; border-radius: 24px; padding: 24px; margin: 10px 0; font-size: 1.15rem; font-weight: 800;
+          background: white; border: 2px solid var(--border); color: var(--primary-dark); transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+        .btn-option.large:active { border-color: var(--primary); background: #f8fbff; transform: scale(0.98); }
+
+        .loader { border: 4px solid #f1f5f9; border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 25px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
