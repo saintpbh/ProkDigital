@@ -195,7 +195,7 @@ function App() {
       alert("푸시 알림이 성공적으로 설정되었습니다.");
       onForegroundMessage();
     } else {
-      alert("알림 권한을 허용하지 않으셨거나 기기에서 지원하지 않습니다.");
+      alert("알림을 설정할 수 없습니다.\n\n[확인 사항]\n1. 아이폰: iOS 16.4 이상입니까?\n2. 홈 화면: '홈 화면에 추가'를 통해 설치한 앱으로 접속하셨습니까?\n3. 차단: 브라우저 설정에서 알림이 차단되어 있지는 않습니까?");
     }
     setShowPushPrompt(false);
   };
@@ -262,19 +262,6 @@ function App() {
             <div style={{ flex: 1, marginRight: '10px' }}>
               <strong style={{ display: 'block', fontSize: '1rem', marginBottom: '4px' }}>🔔 알림 수신 설정</strong>
               <span style={{ fontSize: '0.85rem' }}>앱을 닫아도 중요 공지와 투표 알림을 받을 수 있습니다. (아이폰은 꼭 홈 화면에 추가 후 설정해주세요)</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button onClick={handleEnablePush} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>알림 켜기</button>
-              <button onClick={() => setShowPushPrompt(false)} style={{ background: 'transparent', color: '#0369a1', border: 'none', padding: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>나중에</button>
-            </div>
-          </div>
-        )}
-
-        {showPushPrompt && (
-          <div className="push-prompt-banner" style={{ background: '#e0f2fe', border: '2px solid #0284c7', borderRadius: '12px', padding: '15px', color: '#0c4a6e', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ flex: 1, marginRight: '10px' }}>
-              <strong style={{ display: 'block', fontSize: '1rem', marginBottom: '4px' }}>🔔 알림 수신 설정</strong>
-              <span style={{ fontSize: '0.85rem' }}>앱을 닫아도 중요 공지와 투표 알림을 받을 수 있습니다. (아이폰은 애플 보안정책상 꼭 하단 '홈 화면에 추가' 후 설정해야 합니다)</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button onClick={handleEnablePush} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>알림 켜기</button>
@@ -574,10 +561,10 @@ function App() {
           /* Absolute Contrast Theme: Explicit hex colors only for UI resilience */
         }
         
-        .app { min-height: 100vh; min-height: -webkit-fill-available; background: #f8fafc; color: #0f172a; padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+        .app { min-height: 100vh; min-height: -webkit-fill-available; background: #f8fafc; color: #0f172a; padding-bottom: calc(75px + env(safe-area-inset-bottom)); }
         
         .header { 
-          position: sticky; top: 12px; left: 12px; right: 12px; margin: 12px; 
+          position: sticky; top: env(safe-area-inset-top, 12px); left: 12px; right: 12px; margin: 12px 12px 4px; 
           padding: 16px 24px; border-radius: 20px; z-index: 100;
           display: flex; justify-content: space-between; align-items: center;
           background: #ffffff !important; opacity: 1 !important; border: 3px solid #0f172a !important;
@@ -596,7 +583,7 @@ function App() {
         .pulse { animation: pulseAnim 2s infinite; }
         @keyframes pulseAnim { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
 
-        .container { padding: 90px 20px 20px; max-width: 600px; margin: 0 auto; }
+        .container { padding: calc(env(safe-area-inset-top, 0px) + 90px) 20px 20px; max-width: 600px; margin: 0 auto; }
 
         .announcement-overlay {
           background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); color: #ffffff; border-radius: 20px;
@@ -646,11 +633,11 @@ function App() {
 
         .bottom-nav { 
           position: fixed; bottom: 0; left: 0; right: 0;
-          background: #ffffff; height: 85px; 
+          background: #ffffff; height: calc(65px + env(safe-area-inset-bottom)); 
           display: flex; justify-content: space-around; align-items: center;
           border-top: 2px solid #334155; box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
           border-top-left-radius: 28px; border-top-right-radius: 28px; z-index: 1000;
-          padding: 0 10px calc(10px + env(safe-area-inset-bottom));
+          padding: 0 10px env(safe-area-inset-bottom);
         }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; opacity: 0.6; transition: all 0.3s; height: 100%; border-radius: 20px; color: #475569; }
         .nav-item.active { opacity: 1; color: #1e3a8a; font-weight: 900; }
@@ -686,7 +673,8 @@ function App() {
         }
         .pdf-viewer-header {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 16px 20px; background: #0f172a; color: #ffffff; border-bottom: 2px solid #334155;
+          padding: calc(16px + env(safe-area-inset-top)) 20px 16px; 
+          background: #0f172a; color: #ffffff; border-bottom: 2px solid #334155;
         }
         .pdf-viewer-header h3 { margin: 0; font-size: 1.2rem; font-weight: 800; }
         .btn-close-viewer { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
