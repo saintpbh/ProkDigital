@@ -2,13 +2,19 @@ import { useState, useEffect } from 'react';
 import { db, storage } from './lib/firebase';
 import { 
     collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, 
-    query, orderBy, where, serverTimestamp, Timestamp
+    query, orderBy, where, serverTimestamp, Timestamp, getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 type ViewMode = 'dashboard' | 'management';
 
+import AdminLogin from './AdminLogin';
+
 export default function Admin() {
+    // Auth State
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [loggedInAdminId, setLoggedInAdminId] = useState('');
+
     const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
     const [events, setEvents] = useState<any[]>([]);
     const [activeEvent, setActiveEvent] = useState<any>(null);
@@ -30,10 +36,26 @@ export default function Admin() {
     const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
     const [newPasscode, setNewPasscode] = useState('');
 
-    // Restore saved view mode and active event on mount
+    // Admin Auth & Account Modals
+    const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+    const [adminNewPassword, setAdminNewPassword] = useState('');
+    const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
+    const [newAdminUsername, setNewAdminUsername] = useState('');
+    const [newAdminPassword, setNewAdminPassword] = useState('');
+
+    // Restore saved view mode and auth session on mount
     useEffect(() => {
         const savedMode = localStorage.getItem('admin_viewMode') as ViewMode;
         if (savedMode) setViewMode(savedMode);
+        
+        const savedEventStr = localStorage.getItem('admin_activeEvent');
+        if (savedEventStr) setActiveEvent(JSON.parse(savedEventStr));
+
+        const savedAdmin = sessionStorage.getItem('digital_assembly_admin_id');
+        if (savedAdmin) {
+            setIsAuthenticated(true);
+            setLoggedInAdminId(savedAdmin);
+        }
     }, []);
 
     useEffect(() => {
@@ -51,6 +73,7 @@ export default function Admin() {
 
     // Listen to events collection (real-time)
     useEffect(() => {
+        if (!isAuthenticated) return;
         const q = query(collection(db, 'events'), orderBy('created_at', 'desc'));
         const unsub = onSnapshot(q, (snapshot) => {
             const evts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -336,6 +359,65 @@ export default function Admin() {
     // Dashboard View
     // ==========================================
 
+    const handleLoginSuccess = (username: string) => {
+        sessionStorage.setItem('digital_assembly_admin_id', username);
+        setLoggedInAdminId(username);
+        setIsAuthenticated(true);
+    };
+
+    const handleLogout = () => {
+        sessionStorage.removeItem('digital_assembly_admin_id');
+        setIsAuthenticated(false);
+        setLoggedInAdminId('');
+    };
+
+    const handleChangeAdminPasswordSubmit = async () => {
+        if (!adminNewPassword.trim()) return;
+        try {
+            const q = query(collection(db, 'admins'), where('username', '==', loggedInAdminId));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const docId = snap.docs[0].id;
+                await updateDoc(doc(db, 'admins', docId), { password: adminNewPassword.trim() });
+                alert('비밀번호가 성공적으로 변경되었습니다.');
+                setIsChangePasswordModalOpen(false);
+                setAdminNewPassword('');
+            }
+        } catch(e) {
+            console.error(e);
+            alert('비밀번호 변경 실패');
+        }
+    };
+
+    const handleCreateNewAdminSubmit = async () => {
+        if (!newAdminUsername.trim() || !newAdminPassword.trim()) return;
+        try {
+            const q = query(collection(db, 'admins'), where('username', '==', newAdminUsername.trim()));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                alert('이미 존재하는 관리자 아이디입니다.');
+                return;
+            }
+            await addDoc(collection(db, 'admins'), {
+                username: newAdminUsername.trim(),
+                password: newAdminPassword.trim(),
+                role: 'manager',
+                created_at: serverTimestamp(),
+            });
+            alert(`새 관리자 계정(${newAdminUsername.trim()})이 발급되었습니다.`);
+            setIsCreateAdminModalOpen(false);
+            setNewAdminUsername('');
+            setNewAdminPassword('');
+        } catch(e) {
+            console.error(e);
+            alert('관리자 생성 실패');
+        }
+    };
+
+    if (!isAuthenticated) {
+        return <AdminLogin onLogin={handleLoginSuccess} />;
+    }
+
     if (viewMode === 'dashboard') {
         const recentEvents = events.slice(0, 6);
         const pastEvents = events.slice(6);
@@ -403,6 +485,23 @@ export default function Admin() {
                             </div>
                         </section>
                     )}
+
+                    <section className="event-section" style={{ marginTop: '50px', borderTop: '2px dashed #94a3b8', paddingTop: '40px' }}>
+                        <div className="section-header">
+                            <h2>보안 및 계정 관리</h2>
+                        </div>
+                        <div className="admin-account-panel" style={{ background: '#f8fafc', border: '2px solid #cbd5e1', borderRadius: '24px', padding: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div>
+                                <h3 style={{ margin: '0 0 8px 0', color: '#0f172a', fontSize: '1.4rem' }}>접속 중인 계정: <span style={{ color: '#2563eb' }}>{loggedInAdminId}</span></h3>
+                                <p style={{ margin: 0, color: '#475569', fontSize: '0.95rem' }}>주기적으로 비밀번호를 변경하여 시스템 보안을 철저히 유지하세요.</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                <button onClick={() => setIsChangePasswordModalOpen(true)} style={{ background: '#1e3a8a', color: '#fff', border: 'none', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>내 비밀번호 변경</button>
+                                <button onClick={() => setIsCreateAdminModalOpen(true)} style={{ background: '#ffffff', color: '#1e3a8a', border: '2px solid #1e3a8a', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>새 관리자 발급</button>
+                                <button onClick={handleLogout} style={{ background: '#fee2e2', color: '#be123c', border: '2px solid #be123c', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>시스템 로그아웃</button>
+                            </div>
+                        </div>
+                    </section>
                 </main>
 
                 {/* Custom Create Event Modal */}
@@ -454,6 +553,57 @@ export default function Admin() {
                                         setIsPasscodeModalOpen(false);
                                     }
                                 }}>변경하기</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Custom Admin Password Change Modal */}
+                {isChangePasswordModalOpen && (
+                    <div className="admin-modal-overlay">
+                        <div className="admin-modal">
+                            <h3>내 비밀번호 변경</h3>
+                            <p>사용하실 새로운 시스템 관리자 접속 비밀번호를 입력해 주세요.</p>
+                            <input 
+                                type="text" 
+                                autoFocus
+                                placeholder="예: admin1234" 
+                                value={adminNewPassword}
+                                onChange={(e) => setAdminNewPassword(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleChangeAdminPasswordSubmit(); }}
+                            />
+                            <div className="modal-actions">
+                                <button className="btn-cancel" onClick={() => { setIsChangePasswordModalOpen(false); setAdminNewPassword(''); }}>취소</button>
+                                <button className="btn-confirm" onClick={handleChangeAdminPasswordSubmit}>변경 완료</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Custom Create Admin Modal */}
+                {isCreateAdminModalOpen && (
+                    <div className="admin-modal-overlay">
+                        <div className="admin-modal">
+                            <h3>새 관리자 계정 발급</h3>
+                            <p>발급할 서브 관리자의 접속 아이디와 초기 비밀번호를 설정하세요.</p>
+                            <input 
+                                type="text" 
+                                autoFocus
+                                placeholder="[새 일회용 아이디] 예: sub_admin" 
+                                value={newAdminUsername}
+                                onChange={(e) => setNewAdminUsername(e.target.value)}
+                                style={{ marginBottom: '10px' }}
+                            />
+                            <input 
+                                type="text" 
+                                placeholder="[초기 접속 비밀번호] 예: 0000" 
+                                value={newAdminPassword}
+                                onChange={(e) => setNewAdminPassword(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateNewAdminSubmit(); }}
+                            />
+                            <div className="modal-actions">
+                                <button className="btn-cancel" onClick={() => { setIsCreateAdminModalOpen(false); setNewAdminUsername(''); setNewAdminPassword(''); }}>취소</button>
+                                <button className="btn-confirm" onClick={handleCreateNewAdminSubmit}>즉시 발급하기</button>
                             </div>
                         </div>
                     </div>
