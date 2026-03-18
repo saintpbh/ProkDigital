@@ -86,7 +86,7 @@ export default function Admin() {
             }
         });
         return () => unsub();
-    }, []);
+    }, [isAuthenticated, activeEvent]);
 
     // Listen to files for active event (real-time)
     useEffect(() => {
