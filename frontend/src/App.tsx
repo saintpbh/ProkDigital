@@ -3,6 +3,7 @@ import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
 import './App.css';
+import { requestPushPermission, onForegroundMessage } from './services/messagingService';
 
 function App() {
   const [event, setEvent] = useState<any>(null);
@@ -19,6 +20,7 @@ function App() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
 
   const [voterId] = useState(() => {
     let id = localStorage.getItem('voterId');
@@ -80,6 +82,16 @@ function App() {
     const eventToken = window.location.pathname.startsWith('/join/') 
       ? window.location.pathname.split('/join/')[1] 
       : localStorage.getItem('eventToken');
+
+    // Check Push Permission
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        setShowPushPrompt(true);
+      } else if (Notification.permission === 'granted') {
+        onForegroundMessage();
+      }
+    }
+
     if (eventToken) {
       setToken(eventToken);
       // Load announcement history from localStorage
@@ -167,6 +179,18 @@ function App() {
     }
   };
 
+  const handleEnablePush = async () => {
+    if (!event?.id) return;
+    const success = await requestPushPermission(event.id, voterId);
+    if (success) {
+      alert("푸시 알림이 성공적으로 설정되었습니다.");
+      onForegroundMessage();
+    } else {
+      alert("알림 권한을 허용하지 않으셨거나 기기에서 지원하지 않습니다.");
+    }
+    setShowPushPrompt(false);
+  };
+
   if (!token) return (
     <div className="landing-container">
       <div className="card">
@@ -220,6 +244,32 @@ function App() {
               <span className="announcement-icon">📢</span>
               <div className="announcement-text">{announcement}</div>
               <button className="btn-close-announcement" onClick={() => setAnnouncement(null)}>닫기</button>
+            </div>
+          </div>
+        )}
+
+        {showPushPrompt && (
+          <div className="push-prompt-banner" style={{ background: '#e0f2fe', border: '2px solid #0284c7', borderRadius: '12px', padding: '15px', color: '#0c4a6e', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ flex: 1, marginRight: '10px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', marginBottom: '4px' }}>🔔 알림 수신 설정</strong>
+              <span style={{ fontSize: '0.85rem' }}>앱을 닫아도 중요 공지와 투표 알림을 받을 수 있습니다. (아이폰은 꼭 홈 화면에 추가 후 설정해주세요)</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button onClick={handleEnablePush} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>알림 켜기</button>
+              <button onClick={() => setShowPushPrompt(false)} style={{ background: 'transparent', color: '#0369a1', border: 'none', padding: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>나중에</button>
+            </div>
+          </div>
+        )}
+
+        {showPushPrompt && (
+          <div className="push-prompt-banner" style={{ background: '#e0f2fe', border: '2px solid #0284c7', borderRadius: '12px', padding: '15px', color: '#0c4a6e', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ flex: 1, marginRight: '10px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', marginBottom: '4px' }}>🔔 알림 수신 설정</strong>
+              <span style={{ fontSize: '0.85rem' }}>앱을 닫아도 중요 공지와 투표 알림을 받을 수 있습니다. (아이폰은 애플 보안정책상 꼭 하단 '홈 화면에 추가' 후 설정해야 합니다)</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button onClick={handleEnablePush} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>알림 켜기</button>
+              <button onClick={() => setShowPushPrompt(false)} style={{ background: 'transparent', color: '#0369a1', border: 'none', padding: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>나중에</button>
             </div>
           </div>
         )}
