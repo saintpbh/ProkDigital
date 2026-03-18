@@ -459,7 +459,7 @@ function App() {
               </div>
               <div className="pdf-viewer-body">
                 <iframe 
-                  src={viewerUrl} 
+                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerUrl)}&embedded=true`}
                   title="PDF Viewer" 
                   width="100%" 
                   height="100%"
@@ -467,8 +467,11 @@ function App() {
                 />
               </div>
               <div className="pdf-viewer-footer">
+                <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+                  화면이 잘 보이지 않으면 아래 버튼을 눌러 원본을 다운로드/확인하세요.
+                </p>
                 <button className="btn-full-screen" onClick={() => window.open(viewerUrl, '_blank')}>
-                  브라우저로 보기
+                  브라우저(원본)로 보기
                 </button>
               </div>
             </div>
@@ -593,12 +596,12 @@ function App() {
         .nav-item.focus::after { content: ''; position: absolute; top: 10px; right: 25%; width: 10px; height: 10px; background: #be123c; border-radius: 50%; border: 2px solid #ffffff; animation: pulseAnim 1.5s infinite; }
 
         /* Overlays & Modals */
-        .pdf-viewer-overlay, .detail-overlay, .voting-notification-overlay {
+        .detail-overlay, .voting-notification-overlay {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
           background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px);
           z-index: 2000; display: flex; align-items: flex-end; justify-content: center;
         }
-        .pdf-viewer-container, .detail-card, .notification-card {
+        .detail-card, .notification-card {
           width: 100%; max-width: 500px; background: #ffffff; border-radius: 32px 32px 0 0; 
           overflow: hidden; box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.2); border: 2px solid #334155; border-bottom: none;
           animation: slideUpModal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15);
@@ -606,6 +609,33 @@ function App() {
         @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
         
         .notification-card { padding: 40px 30px; text-align: center; border-radius: 32px; margin: 20px; width: calc(100% - 40px); border: 2px solid #334155; }
+
+        /* Fullscreen PDF Viewer */
+        .pdf-viewer-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: #0f172a; z-index: 3000; 
+          display: flex; flex-direction: column;
+          animation: slideUpModal 0.3s ease-out;
+        }
+        .pdf-viewer-container {
+          flex: 1; display: flex; flex-direction: column; height: 100%; width: 100%; max-width: 800px; margin: 0 auto;
+        }
+        .pdf-viewer-header {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 16px 20px; background: #0f172a; color: #ffffff; border-bottom: 2px solid #334155;
+        }
+        .pdf-viewer-header h3 { margin: 0; font-size: 1.2rem; font-weight: 800; }
+        .btn-close-viewer { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .pdf-viewer-body {
+          flex: 1; width: 100%; min-height: 0; background: #e2e8f0;
+          -webkit-overflow-scrolling: touch;
+        }
+        .pdf-viewer-footer {
+          padding: 16px 20px; background: #ffffff; text-align: center; border-top: 2px solid #334155;
+        }
+        .btn-full-screen {
+          background: #1e3a8a; color: white; border: none; padding: 14px 24px; border-radius: 12px; cursor: pointer; font-weight: 800; font-size: 1.05rem; width: 100%; max-width: 400px; box-shadow: 0 4px 12px rgba(30,58,138,0.2);
+        }
 
         .vote-tab-content { height: calc(100vh - 220px); justify-content: center; display: flex; flex-direction: column; text-align: center; padding: 20px; }
         .btn-option.large { 
