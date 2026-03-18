@@ -270,13 +270,18 @@ function App() {
               <div className="link-section">
                 <h3>외부 링크 (설문/영상)</h3>
                 {displayLinks.map((link: any) => (
-                  <div key={link.id} className="link-card" onClick={() => window.open(link.url, '_blank')}>
+                  <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="link-card" style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}>
                     <span className="icon">🔗</span>
                     <div className="link-info">
                       <div className="title">{link.title}</div>
-                      <div className="url-hint">{new URL(link.url).hostname}</div>
+                      <div className="url-hint">
+                        {(() => {
+                          try { return new URL(link.url).hostname; } 
+                          catch { return link.url; }
+                        })()}
+                      </div>
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             )}
