@@ -8,6 +8,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>디지털 총회 (ProkDigital)</title>
+    <script>
+      (function() {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        const savedPath = localStorage.getItem('pwa_start_path');
+        if (isStandalone && window.location.pathname === '/' && savedPath && savedPath !== '/') {
+          console.log('[PWA] Early redirect to:', savedPath);
+          window.location.replace(savedPath);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

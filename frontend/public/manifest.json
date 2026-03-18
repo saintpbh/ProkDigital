@@ -2,7 +2,6 @@
   "name": "디지털 총회 (ProkDigital)",
   "short_name": "디지털총회",
   "description": "한국기독교장로회 디지털 총회 투표 및 안건지 시스템",
-  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1a237e",

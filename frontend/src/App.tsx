@@ -84,23 +84,12 @@ function App() {
       : localStorage.getItem('eventToken');
 
     try {
-      // [PWA Start URL Fix] 
-      // If we're at the root, check if we're in standalone mode and have a saved path
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-      const savedPwaPath = localStorage.getItem('pwa_start_path');
-      
-      if (window.location.pathname === '/' && isStandalone && savedPwaPath && savedPwaPath !== '/') {
-        console.log('[PWA] Redirecting to last saved path:', savedPwaPath);
-        window.location.replace(savedPwaPath);
-        return;
+      // Save current path for next PWA launch (if it's a join or admin path)
+      if (window.location.pathname.startsWith('/join/') || window.location.pathname === '/admin') {
+        localStorage.setItem('pwa_start_path', window.location.pathname);
       }
     } catch (e) {
-      console.error('[PWA] Redirect logic error:', e);
-    }
-
-    // Save current path for next PWA launch (if it's a join or admin path)
-    if (window.location.pathname.startsWith('/join/') || window.location.pathname === '/admin') {
-      localStorage.setItem('pwa_start_path', window.location.pathname);
+      console.error('[PWA] Path save error:', e);
     }
 
     // Check Push Permission
