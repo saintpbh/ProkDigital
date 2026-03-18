@@ -83,6 +83,26 @@ function App() {
       ? window.location.pathname.split('/join/')[1] 
       : localStorage.getItem('eventToken');
 
+    try {
+      // [PWA Start URL Fix] 
+      // If we're at the root, check if we're in standalone mode and have a saved path
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const savedPwaPath = localStorage.getItem('pwa_start_path');
+      
+      if (window.location.pathname === '/' && isStandalone && savedPwaPath && savedPwaPath !== '/') {
+        console.log('[PWA] Redirecting to last saved path:', savedPwaPath);
+        window.location.replace(savedPwaPath);
+        return;
+      }
+    } catch (e) {
+      console.error('[PWA] Redirect logic error:', e);
+    }
+
+    // Save current path for next PWA launch (if it's a join or admin path)
+    if (window.location.pathname.startsWith('/join/') || window.location.pathname === '/admin') {
+      localStorage.setItem('pwa_start_path', window.location.pathname);
+    }
+
     // Check Push Permission
     if ('Notification' in window) {
       if (Notification.permission === 'default') {
@@ -565,7 +585,7 @@ function App() {
           /* Absolute Contrast Theme: Explicit hex colors only for UI resilience */
         }
         
-        .app { min-height: 100vh; background: #f8fafc; color: #0f172a; padding-bottom: 90px; }
+        .app { min-height: 100vh; min-height: -webkit-fill-available; background: #f8fafc; color: #0f172a; padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
         
         .header { 
           position: sticky; top: 12px; left: 12px; right: 12px; margin: 12px; 
@@ -641,7 +661,7 @@ function App() {
           display: flex; justify-content: space-around; align-items: center;
           border-top: 2px solid #334155; box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
           border-top-left-radius: 28px; border-top-right-radius: 28px; z-index: 1000;
-          padding: 0 10px 10px;
+          padding: 0 10px calc(10px + env(safe-area-inset-bottom));
         }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; opacity: 0.6; transition: all 0.3s; height: 100%; border-radius: 20px; color: #475569; }
         .nav-item.active { opacity: 1; color: #1e3a8a; font-weight: 900; }

@@ -56,6 +56,9 @@ export default function Admin() {
             setIsAuthenticated(true);
             setLoggedInAdminId(savedAdmin);
         }
+
+        // [PWA Start URL Fix] Save admin path
+        localStorage.setItem('pwa_start_path', '/admin');
     }, []);
 
     useEffect(() => {
