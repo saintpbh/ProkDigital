@@ -206,10 +206,10 @@ function App() {
   return (
     <div className="app">
       <PWAInstallGuide />
-      <header className="header glass-pill">
-        <h1>{event.name}</h1>
-        <div className="connection-badge">
-          <span className="dot pulse"></span>
+      <header className="header" style={{ background: '#ffffff', border: '3px solid #0f172a', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        <h1 style={{ color: '#0f172a', fontWeight: '800' }}>{event.name}</h1>
+        <div className="connection-badge" style={{ background: '#f1f5f9', border: '2px solid #0f172a', color: '#047857' }}>
+          <span className="dot pulse" style={{ background: '#047857' }}></span>
           REAL-TIME
         </div>
       </header>
@@ -521,8 +521,8 @@ function App() {
           position: sticky; top: 12px; left: 12px; right: 12px; margin: 12px; 
           padding: 16px 24px; border-radius: 20px; z-index: 100;
           display: flex; justify-content: space-between; align-items: center;
-          background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border: 2px solid var(--border);
-          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+          background: #ffffff !important; opacity: 1 !important; border: 3px solid #0f172a !important;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
           animation: slideDown 0.6s ease-out;
         }
         @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
