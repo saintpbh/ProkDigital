@@ -22,6 +22,10 @@ export default function Admin() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isWarmingUp, setIsWarmingUp] = useState<string | null>(null);
 
+    // Modal state for Add Event
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newEventName, setNewEventName] = useState('');
+
     // Restore saved view mode and active event on mount
     useEffect(() => {
         const savedMode = localStorage.getItem('admin_viewMode') as ViewMode;
@@ -94,8 +98,8 @@ export default function Admin() {
     // Event CRUD (Firestore)
     // ==========================================
 
-    const handleCreateEvent = async () => {
-        const name = prompt('새 행사 이름을 입력하세요');
+    const handleCreateEventSubmit = async () => {
+        const name = newEventName.trim();
         if (!name) return;
         try {
             const token = Math.random().toString(36).substring(2, 10);
@@ -110,6 +114,8 @@ export default function Admin() {
             const newEvent = { id: docRef.id, name, passcode: '1234', token, is_active: true, created_at: new Date() };
             setActiveEvent(newEvent);
             setViewMode('management');
+            setIsCreateModalOpen(false);
+            setNewEventName('');
         } catch (err) {
             console.error('Failed to create event:', err);
             alert('행사 생성에 실패했습니다.');
@@ -346,7 +352,7 @@ export default function Admin() {
                     <section className="event-section">
                         <div className="section-header">
                             <h2>최근 행사</h2>
-                            <button className="btn-add" onClick={handleCreateEvent}>+ 새 행사 추가</button>
+                            <button className="btn-add" onClick={() => setIsCreateModalOpen(true)}>+ 새 행사 추가</button>
                         </div>
                         <div className="event-grid">
                             {recentEvents.map(ev => (
@@ -391,6 +397,29 @@ export default function Admin() {
                         </section>
                     )}
                 </main>
+
+                {/* Custom Create Event Modal */}
+                {isCreateModalOpen && (
+                    <div className="admin-modal-overlay">
+                        <div className="admin-modal">
+                            <h3>새로운 행사 추가</h3>
+                            <p>생성할 행사의 이름을 입력해 주세요.</p>
+                            <input 
+                                type="text" 
+                                autoFocus
+                                placeholder="예: 2026년 정기 총회" 
+                                value={newEventName}
+                                onChange={(e) => setNewEventName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateEventSubmit(); }}
+                            />
+                            <div className="modal-actions">
+                                <button className="btn-cancel" onClick={() => { setIsCreateModalOpen(false); setNewEventName(''); }}>취소</button>
+                                <button className="btn-confirm" onClick={handleCreateEventSubmit}>생성하기</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <style>{dashboardStyles}</style>
             </div>
         );
@@ -669,6 +698,35 @@ const dashboardStyles = `
     .event-card.mini h3 { font-size: 1.1rem; margin: 0; }
     .btn-past-del { background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; transition: color 0.2s; }
     .btn-past-del:hover { color: #be123c; }
+
+    /* Modal Styles */
+    .admin-modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .admin-modal {
+      background: #ffffff; width: 100%; max-width: 420px; border-radius: 24px; padding: 32px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 2px solid #1e3a8a;
+      animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    
+    .admin-modal h3 { margin: 0 0 10px; font-size: 1.4rem; color: #0f172a; }
+    .admin-modal p { margin: 0 0 20px; font-size: 0.95rem; color: #475569; }
+    .admin-modal input {
+      width: 100%; padding: 14px 16px; border: 2px solid #cbd5e1; border-radius: 12px;
+      font-size: 1.05rem; margin-bottom: 24px; box-sizing: border-box; outline: none; transition: 0.2s;
+    }
+    .admin-modal input:focus { border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1); }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+    .modal-actions button { padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 1rem; border: none; transition: 0.2s; }
+    .btn-cancel { background: #f1f5f9; color: #475569; }
+    .btn-cancel:hover { background: #e2e8f0; color: #0f172a; }
+    .btn-confirm { background: #1e3a8a; color: #ffffff; }
+    .btn-confirm:hover { background: #1e40af; }
 `;
 
 const managementStyles = `
