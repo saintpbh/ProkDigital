@@ -26,6 +26,10 @@ export default function Admin() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newEventName, setNewEventName] = useState('');
 
+    // Modal state for Passcode Modification
+    const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
+    const [newPasscode, setNewPasscode] = useState('');
+
     // Restore saved view mode and active event on mount
     useEffect(() => {
         const savedMode = localStorage.getItem('admin_viewMode') as ViewMode;
@@ -125,6 +129,9 @@ export default function Admin() {
     const handleUpdateEvent = async (id: string, data: any) => {
         try {
             await updateDoc(doc(db, 'events', id), data);
+            if (activeEvent?.id === id) {
+                setActiveEvent((prev: any) => ({ ...prev, ...data }));
+            }
         } catch (err) {
             console.error('Failed to update event:', err);
             alert('행사 업데이트에 실패했습니다.');
@@ -420,6 +427,38 @@ export default function Admin() {
                     </div>
                 )}
 
+                {/* Custom Passcode Change Modal */}
+                {isPasscodeModalOpen && (
+                    <div className="admin-modal-overlay">
+                        <div className="admin-modal">
+                            <h3>접속 비밀번호 변경</h3>
+                            <p>대의원들이 로그인할 때 사용할 새 비밀번호를 입력해 주세요.</p>
+                            <input 
+                                type="text" 
+                                autoFocus
+                                placeholder="예: 4567" 
+                                value={newPasscode}
+                                onChange={(e) => setNewPasscode(e.target.value)}
+                                onKeyDown={(e) => { 
+                                    if (e.key === 'Enter' && newPasscode.trim()) {
+                                        handleUpdateEvent(activeEvent.id, { passcode: newPasscode.trim() });
+                                        setIsPasscodeModalOpen(false);
+                                    } 
+                                }}
+                            />
+                            <div className="modal-actions">
+                                <button className="btn-cancel" onClick={() => { setIsPasscodeModalOpen(false); setNewPasscode(''); }}>취소</button>
+                                <button className="btn-confirm" onClick={() => {
+                                    if (newPasscode.trim()) {
+                                        handleUpdateEvent(activeEvent.id, { passcode: newPasscode.trim() });
+                                        setIsPasscodeModalOpen(false);
+                                    }
+                                }}>변경하기</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <style>{dashboardStyles}</style>
             </div>
         );
@@ -487,6 +526,16 @@ export default function Admin() {
                                     }
                                 }}>주소 복사</button>
                                 <button onClick={() => window.open(joinUrl, '_blank')}>열기</button>
+                            </div>
+                        </div>
+                        <div className="test-url" style={{ marginTop: '20px' }}>
+                            <label>현재 접속 비밀번호 (패스코드)</label>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                <input readOnly value={activeEvent?.passcode || '설정안됨'} style={{ flex: 1, fontWeight: '800', letterSpacing: '2px', textAlign: 'center', color: '#1e3a8a', fontSize: '1.2rem' }} />
+                                <button onClick={() => {
+                                    setNewPasscode(activeEvent?.passcode || '');
+                                    setIsPasscodeModalOpen(true);
+                                }} style={{ padding: '12px 20px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}>비밀번호 변경</button>
                             </div>
                         </div>
                     </section>
