@@ -332,7 +332,7 @@ function App() {
               </div>
             )}
 
-            <h3>참여 문서 (PDF)</h3>
+            <h3>공유 문서 (PDF)</h3>
             {displayFiles.map((file: any, index: number) => (
               <div key={file.id} className="file-card">
                 <div className="file-info">
