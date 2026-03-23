@@ -18,9 +18,14 @@ createRoot(document.getElementById('root')!).render(
 
 // Register Service Worker for FCM
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/firebase-messaging-sw.js')
-      .then(reg => console.log('[SW] Firebase Messaging SW registered:', reg.scope))
-      .catch(err => console.error('[SW] Registration failed:', err));
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: '/'
+      });
+      console.log('[SW] Firebase Messaging SW registered:', reg.scope);
+    } catch (err) {
+      console.error('[SW] Registration failed:', err);
+    }
   });
 }

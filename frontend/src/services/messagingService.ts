@@ -29,17 +29,21 @@ export const requestPushPermission = async (eventId: string, delegateId: string)
       // Save the token to Firestore
       await saveTokenToFirestore(eventId, delegateId, token);
       
-      // Send the config to the Service Worker so it can initialize Firebase in the background
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-              type: 'INIT_FIREBASE',
-              firebaseConfig: app.options
+      // Ensure the Service Worker is ready and controlling the page
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration.active) {
+          registration.active.postMessage({
+            type: 'INIT_FIREBASE',
+            firebaseConfig: app.options
           });
+          console.log('[Push] Sent INIT_FIREBASE to active SW');
+        }
       }
 
       return true;
     } else {
-      console.log('No FCM Token available. Request permission to generate one.');
+      console.log('No FCM Token available.');
       return false;
     }
   } catch (error) {
@@ -62,15 +66,17 @@ const saveTokenToFirestore = async (eventId: string, delegateId: string, token: 
   }
 };
 
-export const onForegroundMessage = () => {
-  isSupported().then(supported => {
-    if (supported) {
-      const messaging = getMessaging(app);
-      onMessage(messaging, (payload) => {
-        console.log('Received foreground message ', payload);
-        // You can use a toast notification here if you want to show it in-app
-        // alert(`새 알림: ${payload.notification?.title}\n${payload.notification?.body}`);
-      });
-    }
-  });
+export const onForegroundMessage = async () => {
+  try {
+    const supported = await isSupported();
+    if (!supported) return;
+
+    const messaging = getMessaging(app);
+    onMessage(messaging, (payload) => {
+      console.log('Received foreground message ', payload);
+      // Optional: Add a custom UI toast here if needed
+    });
+  } catch (error) {
+    console.error('Error in onForegroundMessage:', error);
+  }
 };
