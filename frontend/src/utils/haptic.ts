@@ -1,124 +1,196 @@
 /**
- * Unified Haptic Feedback Utility
- * Supports navigator.vibrate (Android / Standard) + Web Audio API pulse fallback for iOS Safari.
+ * High-Impact Dual Haptic Engine
+ * 1. Android: High-torque motor vibration (30ms - 500ms multi-pulse)
+ * 2. iOS: Physical speaker tactile impulse (Sub-bass + mechanical transient click)
  */
 
-// Web Audio API context for iOS tactile feedback fallback
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
+function unlockAudioContext() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtx = new AudioContextClass();
+      }
     }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+  } catch (e) {
+    // ignore
   }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
-  }
-  return audioCtx;
+}
+
+// Auto-unlock on first user touch anywhere
+if (typeof window !== 'undefined') {
+  const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'click'];
+  const handleFirstTouch = () => {
+    unlockAudioContext();
+    unlockEvents.forEach(evt => window.removeEventListener(evt, handleFirstTouch));
+  };
+  unlockEvents.forEach(evt => window.addEventListener(evt, handleFirstTouch, { passive: true }));
 }
 
 /**
- * Play a subtle synthesized audio click/haptic pulse for iOS Safari
+ * Synthesize a crisp mechanical tactile impulse for iOS
  */
-function playSyntheticPulse(frequency = 150, duration = 0.04, gainLevel = 0.08) {
+function playTactileImpulse(type: 'light' | 'medium' | 'heavy' | 'double' | 'long') {
   try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(frequency, ctx.currentTime);
-    
-    gain.gain.setValueAtTime(gainLevel, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
+    unlockAudioContext();
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+
+    if (type === 'light') {
+      // Crisp mechanical tab click (450Hz transient + 75Hz sub body)
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(450, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.035);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.035);
+    } else if (type === 'medium') {
+      // Solid button press
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.05);
+      gain.gain.setValueAtTime(0.5, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.05);
+    } else if (type === 'heavy') {
+      // Document view / Modal open
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+      gain.gain.setValueAtTime(0.45, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } else if (type === 'double') {
+      // Notification alert
+      [0, 0.1].forEach((delay) => {
+        const osc = audioCtx!.createOscillator();
+        const gain = audioCtx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(80, now + delay + 0.06);
+        gain.gain.setValueAtTime(0.5, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.06);
+        osc.connect(gain);
+        gain.connect(audioCtx!.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.06);
+      });
+    } else if (type === 'long') {
+      // New Document Shared (Long prominent feedback)
+      [0, 0.12, 0.26].forEach((delay) => {
+        const osc = audioCtx!.createOscillator();
+        const gain = audioCtx!.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(60, now + delay + 0.1);
+        gain.gain.setValueAtTime(0.6, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.1);
+        osc.connect(gain);
+        gain.connect(audioCtx!.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.1);
+      });
+    }
   } catch (e) {
-    // Ignore audio context autoplay restriction errors
+    // ignore
   }
 }
 
 /**
  * Trigger vibration pattern with iOS audio fallback
  */
-function vibrate(pattern: number | number[], audioFreq = 160, audioDur = 0.04) {
+function vibrate(androidPattern: number | number[], iosType: 'light' | 'medium' | 'heavy' | 'double' | 'long') {
   if (typeof window === 'undefined') return;
 
-  // 1. Android / standard navigator.vibrate
+  // 1. Android physical vibration (ensured min 30ms duration for motor spin-up)
   if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
     try {
-      navigator.vibrate(pattern);
+      navigator.vibrate(androidPattern);
     } catch (e) {
       // ignore
     }
   }
 
-  // 2. iOS audio tactile pulse
-  playSyntheticPulse(audioFreq, audioDur);
+  // 2. iOS Speaker tactile mechanical impulse
+  playTactileImpulse(iosType);
 }
 
 export const haptic = {
   /**
-   * Light tap for tab switching
+   * Light, distinct tap for bottom tab switching
    */
   tab: () => {
-    vibrate(12, 220, 0.02);
+    vibrate([35], 'light');
   },
 
   /**
    * Standard button click
    */
   button: () => {
-    vibrate(15, 200, 0.03);
+    vibrate([45], 'medium');
   },
 
   /**
    * Document click / View opening
    */
   viewDocument: () => {
-    vibrate(35, 180, 0.05);
+    vibrate([60], 'heavy');
   },
 
   /**
    * Modal open / Close
    */
   modal: () => {
-    vibrate(20, 240, 0.03);
+    vibrate([40], 'medium');
   },
 
   /**
    * Action success / Confirmation
    */
   success: () => {
-    vibrate([25, 40, 45], 300, 0.06);
+    vibrate([40, 50, 60], 'double');
   },
 
   /**
    * Warning / Dismiss
    */
   warning: () => {
-    vibrate([50, 40, 50], 120, 0.08);
+    vibrate([80, 50, 80], 'double');
   },
 
   /**
-   * Incoming Announcement / Notification alert (Medium-strong)
+   * Incoming Announcement alert
    */
   notification: () => {
-    vibrate([150, 80, 180], 350, 0.12);
+    vibrate([200, 100, 250], 'double');
   },
 
   /**
-   * New Document Shared — Long, prominent, unmissable feedback
+   * New Document Shared — Long, unmissable feedback
    */
   newDocument: () => {
-    vibrate([250, 100, 250, 100, 500], 400, 0.18);
+    vibrate([300, 100, 300, 100, 600], 'long');
   }
 };

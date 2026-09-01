@@ -125,21 +125,29 @@ exports.sendAnnouncementPush = functions.firestore
     const before = change.before.data();
     const after = change.after.data();
     
-    if (after.current_announcement && before.current_announcement !== after.current_announcement) {
+    const isNew = after.current_announcement && (
+        before.current_announcement !== after.current_announcement ||
+        before.current_announcement_ts !== after.current_announcement_ts
+    );
+
+    if (isNew) {
         try {
             const tokensSnap = await db.collection("events").doc(context.params.eventId).collection("delegateTokens").get();
             if (tokensSnap.empty) return;
             
             const tokens = tokensSnap.docs.map(doc => doc.data().token);
+            const cleanTitle = (after.name || "디지털 총회") + " 공지사항";
+            const cleanBody = String(after.current_announcement).replace(/[📢📣]/g, '').trim();
+
             const payload = {
                 notification: {
-                    title: "📢 공지사항: " + (after.name || "디지털 총회"),
-                    body: after.current_announcement
+                    title: cleanTitle,
+                    body: cleanBody
                 },
                 webpush: {
                     notification: {
-                        title: "📢 공지사항: " + (after.name || "디지털 총회"),
-                        body: after.current_announcement,
+                        title: cleanTitle,
+                        body: cleanBody,
                         icon: "/icon-192.png",
                         badge: "/icon-192.png",
                         vibrate: [200, 100, 200]
@@ -150,6 +158,8 @@ exports.sendAnnouncementPush = functions.firestore
                 },
                 data: {
                     type: "announcement",
+                    title: cleanTitle,
+                    body: cleanBody,
                     url: "https://digital.prok.or.kr/"
                 }
             };

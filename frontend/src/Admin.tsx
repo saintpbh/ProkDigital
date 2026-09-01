@@ -221,7 +221,8 @@ export default function Admin() {
         if (!activeEvent || !announcement) return;
         try {
             await updateDoc(doc(db, 'events', activeEvent.id), {
-                current_announcement: announcement,
+                current_announcement: announcement.trim(),
+                current_announcement_ts: Date.now(),
             });
             showAlert('공지가 발송되었습니다.');
             setAnnouncement('');
