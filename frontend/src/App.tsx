@@ -843,8 +843,9 @@ function App() {
           <iframe src={prefetchUrl} className="prefetch-buffer" title="prefetch-buffer" />
         )}
       </main>
+    </div>
 
-      {/* 3-Tab Bottom Navigation for Mobile (Hidden on iPad / PC) */}
+    {/* 3-Tab Bottom Navigation for Mobile (Hidden on iPad / PC) */}
       <nav className="bottom-nav mobile-tab-nav">
         <div 
           className={`nav-item ${activeTab === 'agenda' ? 'active' : ''}`} 
@@ -871,9 +872,8 @@ function App() {
           <span>알림</span>
         </div>
       </nav>
-    </div>
 
-    {/* ➡️ Right Detail Pane (Dedicated iPad / Tablet / PC Document Viewer) */}
+      {/* ➡️ Right Detail Pane (Dedicated iPad / Tablet / PC Document Viewer) */}
     <aside className="workspace-detail-pane">
       {selectedDoc ? (
         <div className="split-doc-viewer">

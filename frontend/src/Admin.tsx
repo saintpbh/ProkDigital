@@ -46,8 +46,10 @@ export default function Admin() {
     const [newEventName, setNewEventName] = useState('');
 
     // Schedule Modals & Forms
-    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+    const [isScheduleListModalOpen, setIsScheduleListModalOpen] = useState(false);
+    const [isScheduleFormModalOpen, setIsScheduleFormModalOpen] = useState(false);
     const [isBatchScheduleModalOpen, setIsBatchScheduleModalOpen] = useState(false);
+    const [scheduleModalDayFilter, setScheduleModalDayFilter] = useState('ALL');
     const [batchScheduleText, setBatchScheduleText] = useState('');
     const [editingSchedule, setEditingSchedule] = useState<any>(null);
     const [scheduleForm, setScheduleForm] = useState({
@@ -310,7 +312,7 @@ export default function Admin() {
     const openAddScheduleModal = () => {
         setEditingSchedule(null);
         setScheduleForm({ day: '1일차', time: '', title: '', location: '', description: '' });
-        setIsScheduleModalOpen(true);
+        setIsScheduleFormModalOpen(true);
     };
 
     const openEditScheduleModal = (item: any) => {
@@ -322,7 +324,7 @@ export default function Admin() {
             location: item.location || '',
             description: item.description || ''
         });
-        setIsScheduleModalOpen(true);
+        setIsScheduleFormModalOpen(true);
     };
 
     const handleSaveScheduleSubmit = async () => {
@@ -356,7 +358,7 @@ export default function Admin() {
                 });
                 showAlert('일정 등록 완료', '새 일정이 등록되었습니다.');
             }
-            setIsScheduleModalOpen(false);
+            setIsScheduleFormModalOpen(false);
         } catch (err) {
             console.error('Failed to save schedule:', err);
             showAlert('일정 저장에 실패했습니다.');
@@ -892,63 +894,39 @@ export default function Admin() {
                 </aside>
 
                 <main className="mgmt-content">
-                    {/* 📅 Schedule Management */}
-                    <section className="content-area">
-                        <div className="area-header">
-                            <h3>📅 총회 일정 관리</h3>
-                            <div className="area-header-actions">
-                                <button className="btn-secondary" onClick={() => setIsBatchScheduleModalOpen(true)}>⚡ 간편 일괄 등록</button>
-                                <button className="btn-primary" onClick={openAddScheduleModal}>+ 새 일정 추가</button>
+                    {/* 📅 Compact Schedule Management Summary Card (Opens Modal) */}
+                    <section className="content-area schedule-summary-area">
+                        <div className="schedule-summary-card">
+                            <div className="summary-left">
+                                <div className="summary-icon-wrap">📅</div>
+                                <div className="summary-text-group">
+                                    <div className="summary-title-row">
+                                        <h4>총회 회무 일정 관리</h4>
+                                        <span className="summary-count-badge">총 {schedules.length}개 등록됨</span>
+                                    </div>
+                                    <div className="summary-status-text">
+                                        {(() => {
+                                            const currentItem = schedules.find(s => s.is_current);
+                                            if (currentItem) {
+                                                return (
+                                                    <span className="status-item-live">
+                                                        현재 진행 중: <strong className="now-title-tag">🟢 [{currentItem.day}] {currentItem.title}</strong>
+                                                        {currentItem.time && <span className="now-time-tag">({currentItem.time})</span>}
+                                                    </span>
+                                                );
+                                            }
+                                            return <span className="text-muted">현재 진행 중(NOW)으로 설정된 일정이 없습니다.</span>;
+                                        })()}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div className="management-list">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>일차</th>
-                                        <th>시간</th>
-                                        <th>일정명</th>
-                                        <th>장소</th>
-                                        <th>진행 상태</th>
-                                        <th>제어</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {schedules.map(s => (
-                                        <tr key={s.id} className={s.is_current ? 'row-current-highlight' : ''}>
-                                            <td><span className="day-badge">{s.day}</span></td>
-                                            <td><span className="time-badge">{s.time || '-'}</span></td>
-                                            <td>
-                                                <strong>{s.title}</strong>
-                                                {s.description && <div className="sub-desc">{s.description}</div>}
-                                            </td>
-                                            <td><span className="loc-badge">{s.location || '-'}</span></td>
-                                            <td>
-                                                <button 
-                                                    className={`btn-status-toggle ${s.is_current ? 'is-now' : ''}`}
-                                                    onClick={() => toggleCurrentSchedule(s.id, s.is_current)}
-                                                    title="클릭 시 대의원 화면에 현재 진행 중(NOW)으로 강조 표시"
-                                                >
-                                                    {s.is_current ? '🟢 진행 중 (NOW)' : '대기'}
-                                                </button>
-                                            </td>
-                                            <td>
-                                                <div className="btn-group">
-                                                    <button onClick={() => openEditScheduleModal(s)} title="수정">✏️</button>
-                                                    <button className="del" onClick={() => deleteSchedule(s.id)}>삭제</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {schedules.length === 0 && (
-                                        <tr>
-                                            <td colSpan={6} className="empty-state">
-                                                등록된 일정이 없습니다. [+ 새 일정 추가] 또는 [⚡ 간편 일괄 등록] 버튼을 눌러 일정을 등록하세요.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                            <div className="summary-actions">
+                                <button className="btn-secondary" onClick={() => setIsBatchScheduleModalOpen(true)}>⚡ 간편 일괄 등록</button>
+                                <button className="btn-secondary" onClick={openAddScheduleModal}>+ 새 일정 추가</button>
+                                <button className="btn-primary btn-open-schedule-modal" onClick={() => setIsScheduleListModalOpen(true)}>
+                                    📅 일정 전체 관리 / 수정 (팝업) 〉
+                                </button>
+                            </div>
                         </div>
                     </section>
 
@@ -1133,8 +1111,98 @@ export default function Admin() {
             </div>
         </div>
 
-        {/* Schedule Add / Edit Modal */}
-        {isScheduleModalOpen && (
+        {/* 📅 Schedule Management List Popup Modal (Full Schedule Table) */}
+        {isScheduleListModalOpen && (
+            <div className="admin-modal-overlay schedule-list-modal-overlay" onClick={() => setIsScheduleListModalOpen(false)}>
+                <div className="admin-modal schedule-list-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="schedule-modal-header">
+                        <div>
+                            <h3>📅 총회 회무 일정 관리 (전체 목록)</h3>
+                            <p className="modal-subtitle">
+                                각 일정의 <strong>[진행 중 (NOW)]</strong> 버튼을 누르면 대의원 모바일 화면에 실시간으로 강조 배지가 표시됩니다.
+                            </p>
+                        </div>
+                        <div className="modal-header-actions">
+                            <button className="btn-secondary" onClick={() => setIsBatchScheduleModalOpen(true)}>⚡ 간편 일괄 등록</button>
+                            <button className="btn-primary" onClick={openAddScheduleModal}>+ 새 일정 추가</button>
+                            <button className="btn-close-modal-x" onClick={() => setIsScheduleListModalOpen(false)}>✕</button>
+                        </div>
+                    </div>
+
+                    {/* Day Filter Pills */}
+                    <div className="schedule-filter-tabs">
+                        {['ALL', '1일차', '2일차', '3일차'].map(day => (
+                            <button 
+                                key={day} 
+                                className={`filter-tab-btn ${scheduleModalDayFilter === day ? 'active' : ''}`}
+                                onClick={() => setScheduleModalDayFilter(day)}
+                            >
+                                {day === 'ALL' ? `전체 일정 (${schedules.length})` : `${day} (${schedules.filter(s => s.day === day).length})`}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Schedule List Table */}
+                    <div className="schedule-modal-table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>일차</th>
+                                    <th>시간</th>
+                                    <th>일정명 및 비고</th>
+                                    <th>장소</th>
+                                    <th>진행 상태 (대의원 실시간 연동)</th>
+                                    <th>제어</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(scheduleModalDayFilter === 'ALL' ? schedules : schedules.filter(s => s.day === scheduleModalDayFilter)).map(s => (
+                                    <tr key={s.id} className={s.is_current ? 'row-current-highlight' : ''}>
+                                        <td><span className="day-badge">{s.day}</span></td>
+                                        <td><span className="time-badge">{s.time || '-'}</span></td>
+                                        <td>
+                                            <strong>{s.title}</strong>
+                                            {s.description && <div className="sub-desc">{s.description}</div>}
+                                        </td>
+                                        <td><span className="loc-badge">{s.location || '-'}</span></td>
+                                        <td>
+                                            <button 
+                                                className={`btn-status-toggle ${s.is_current ? 'is-now' : ''}`}
+                                                onClick={() => toggleCurrentSchedule(s.id, s.is_current)}
+                                                title="클릭 시 대의원 화면에 현재 진행 중(NOW)으로 강조 표시"
+                                            >
+                                                {s.is_current ? '🟢 진행 중 (NOW)' : '대기'}
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <div className="btn-group">
+                                                <button onClick={() => openEditScheduleModal(s)} title="수정">✏️</button>
+                                                <button className="del" onClick={() => deleteSchedule(s.id)}>삭제</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {schedules.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="empty-state">
+                                            등록된 일정이 없습니다. [+ 새 일정 추가] 또는 [⚡ 간편 일괄 등록] 버튼을 눌러 일정을 등록하세요.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="schedule-modal-footer">
+                        <span className="footer-count-text">총 {schedules.length}건 등록됨</span>
+                        <button className="btn-confirm" onClick={() => setIsScheduleListModalOpen(false)}>완료 / 닫기</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Schedule Add / Edit Modal (Single Item Form) */}
+        {isScheduleFormModalOpen && (
             <div className="admin-modal-overlay">
                 <div className="admin-modal schedule-modal">
                     <h3>{editingSchedule ? '일정 수정' : '새 일정 추가'}</h3>
@@ -1185,7 +1253,7 @@ export default function Admin() {
                         />
                     </div>
                     <div className="modal-actions">
-                        <button className="btn-cancel" onClick={() => setIsScheduleModalOpen(false)}>취소</button>
+                        <button className="btn-cancel" onClick={() => setIsScheduleFormModalOpen(false)}>취소</button>
                         <button className="btn-confirm" onClick={handleSaveScheduleSubmit}>
                             {editingSchedule ? '수정 완료' : '일정 등록'}
                         </button>

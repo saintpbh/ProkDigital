@@ -9,7 +9,8 @@
   min-height: -webkit-fill-available;
   background: var(--bg-page);
   color: var(--text-primary);
-  padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ── Landing Page (No Token) ── */
@@ -138,34 +139,38 @@
   top: 0;
   left: 0;
   right: 0;
-  padding-top: max(16px, env(safe-area-inset-top, 16px));
-  padding-bottom: 14px;
-  padding-left: max(20px, env(safe-area-inset-left, 20px));
-  padding-right: max(20px, env(safe-area-inset-right, 20px));
+  padding-top: max(12px, env(safe-area-inset-top, 12px));
+  padding-bottom: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 16px));
+  padding-right: max(16px, env(safe-area-inset-right, 16px));
   z-index: var(--z-sticky);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--bg-card);
+  background: #ffffff;
   border-bottom: 1px solid var(--border-default);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   animation: fadeInDown var(--duration-slow) var(--ease-out);
 }
 .header-brand-wrap {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 .header-logo-img {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   flex-shrink: 0;
 }
 .header h1 {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
+  font-size: 16px;
+  font-weight: 700;
   margin: 0;
   font-family: var(--font-display);
   color: var(--text-primary);
@@ -176,22 +181,25 @@
 .connection-badge {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  gap: 4px;
+  padding: 3px 8px;
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: var(--weight-bold);
   color: var(--color-success);
   background: var(--color-success-light);
   letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 /* ── Container ── */
 .container {
-  padding: 20px 16px;
-  padding-bottom: calc(95px + env(safe-area-inset-bottom, 24px));
-  max-width: 600px;
+  padding: 16px;
+  padding-bottom: calc(85px + env(safe-area-inset-bottom, 20px));
+  max-width: 520px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ── Announcement Overlay Banner ── */
@@ -1292,26 +1300,32 @@ a.link-card {
 /* Mobile Default (< 900px) */
 .app-split-workspace {
   display: block;
+  width: 100%;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .workspace-master-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+  display: block;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .desktop-tab-nav {
-  display: none;
+  display: none !important;
 }
 
 .workspace-detail-pane {
-  display: none;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
 }
 
 .mobile-tab-nav {
-  display: flex;
+  display: flex !important;
 }
 
 .file-card.is-selected-card {
