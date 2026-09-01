@@ -547,6 +547,36 @@ function App() {
               )}
             </div>
 
+            {/* 🔔 Push Notification Status & Trigger Card */}
+            <div className="push-setting-card">
+              <div className="push-card-header">
+                <div className="push-card-title">
+                  <span className="push-icon">🔔</span>
+                  <div>
+                    <h4>실시간 푸시 알림 설정</h4>
+                    <span className={`push-status-tag ${typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'granted' : 'pending'}`}>
+                      {typeof Notification !== 'undefined' && Notification.permission === 'granted' 
+                        ? '✅ 알림 수신 중' 
+                        : '⚠️ 알림 꺼짐'}
+                    </span>
+                  </div>
+                </div>
+                <button 
+                  className="btn-enable-push-setting"
+                  onClick={handleEnablePush}
+                >
+                  {typeof Notification !== 'undefined' && Notification.permission === 'granted'
+                    ? '🔄 알림 재동기화'
+                    : '🔔 알림 켜기'}
+                </button>
+              </div>
+              <p className="push-card-desc">
+                {typeof Notification !== 'undefined' && Notification.permission === 'granted'
+                  ? '앱이 닫혀 있거나 화면이 꺼져 있어도 중요 공지와 새 문서가 공유되면 잠금 화면으로 알림이 전송됩니다.'
+                  : '아이폰은 홈 화면에 추가된 앱에서 [알림 켜기]를 누른 후 시스템 팝업에서 [허용]을 선택해 주셔야 푸시 알림이 작동합니다.'}
+              </p>
+            </div>
+
             {/* ℹ️ App Info & Force Update Card */}
             <div className="app-info-card">
               <div className="info-card-header">
