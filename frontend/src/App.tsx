@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
+import { FastPdfViewer } from './components/FastPdfViewer';
+import { preloadAllPdfs } from './utils/pdfCache';
 import { haptic } from './utils/haptic';
 import { APP_VERSION, forceUpdateApp } from './utils/appUpdate';
 import './styles/global.css';
@@ -31,7 +33,6 @@ function App() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
-  const [showViewerHint, setShowViewerHint] = useState(true);
   const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -275,16 +276,13 @@ function App() {
     }
   }, [displayFiles, selectedDoc]);
 
-  // Auto-dismiss mobile viewer hint toast after 5 seconds
+  // Preload all public PDF documents into memory cache for 0ms instant switching
   useEffect(() => {
-    if (viewerUrl) {
-      setShowViewerHint(true);
-      const timer = setTimeout(() => {
-        setShowViewerHint(false);
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (displayFiles.length > 0) {
+      const urls = displayFiles.map((f: any) => f.url).filter(Boolean);
+      preloadAllPdfs(urls);
     }
-  }, [viewerUrl]);
+  }, [displayFiles]);
 
   // Force Update Handler
   const handleForceUpdate = async () => {
@@ -774,68 +772,13 @@ function App() {
           </div>
         )}
 
-        {/* Integrated PDF Viewer Overlay (Mobile only / Modal) */}
+        {/* Ultra-Fast Integrated PDF Viewer (Mobile only / Modal) */}
         {viewerUrl && (
-          <div 
-            className="pdf-viewer-overlay" 
-            onClick={() => {
-              haptic.modal();
-              setViewerUrl(null);
-            }}
-          >
-            <div className="pdf-viewer-container" onClick={(e) => e.stopPropagation()}>
-              <div className="pdf-viewer-header">
-                <div className="pdf-viewer-title-wrap">
-                  <span className="pdf-badge">PDF</span>
-                  <h3>문서 열람</h3>
-                </div>
-                <div className="pdf-viewer-header-actions">
-                  <button 
-                    className="btn-header-browser" 
-                    onClick={() => {
-                      haptic.button();
-                      window.open(viewerUrl, '_blank');
-                    }}
-                    title="브라우저(원본)로 보기 / 다운로드"
-                  >
-                    🌐 브라우저로 보기
-                  </button>
-                  <button 
-                    className="btn-close-viewer" 
-                    onClick={() => {
-                      haptic.modal();
-                      setViewerUrl(null);
-                    }}
-                  >
-                    닫기
-                  </button>
-                </div>
-              </div>
-              <div className="pdf-viewer-body">
-                <iframe 
-                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerUrl)}&embedded=true`}
-                  title="PDF Viewer" 
-                  width="100%" 
-                  height="100%"
-                  className="pdf-iframe"
-                />
-
-                {/* Floating 5-second auto-dismissing notice toast */}
-                {showViewerHint && (
-                  <div className="pdf-viewer-floating-toast">
-                    <span>💡 화면이 잘 보이지 않으면 상단 <strong>[🌐 브라우저로 보기]</strong>를 누르세요.</span>
-                    <button 
-                      className="btn-close-toast" 
-                      onClick={() => setShowViewerHint(false)}
-                      title="알림 닫기"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <FastPdfViewer 
+            url={viewerUrl}
+            title={displayFiles.find((f: any) => f.url === viewerUrl)?.title || "문서 열람"}
+            onClose={() => setViewerUrl(null)}
+          />
         )}
 
         {/* Hidden Pre-fetch Buffer */}
@@ -846,75 +789,42 @@ function App() {
     </div>
 
     {/* 3-Tab Bottom Navigation for Mobile (Hidden on iPad / PC) */}
-      <nav className="bottom-nav mobile-tab-nav">
-        <div 
-          className={`nav-item ${activeTab === 'agenda' ? 'active' : ''}`} 
-          onClick={() => handleTabChange('agenda')}
-        >
-          <span className="nav-icon">📑</span>
-          <span>문서</span>
+    <nav className="bottom-nav mobile-tab-nav">
+      <div 
+        className={`nav-item ${activeTab === 'agenda' ? 'active' : ''}`} 
+        onClick={() => handleTabChange('agenda')}
+      >
+        <span className="nav-icon">📑</span>
+        <span>문서</span>
+      </div>
+      <div 
+        className={`nav-item ${activeTab === 'schedule' ? 'active' : ''}`} 
+        onClick={() => handleTabChange('schedule')}
+      >
+        <span className="nav-icon">📅</span>
+        <span>일정</span>
+      </div>
+      <div 
+        className={`nav-item ${activeTab === 'announcements' ? 'active' : ''}`} 
+        onClick={() => handleTabChange('announcements')}
+      >
+        <div className="nav-icon-container">
+          <span className="nav-icon">🔔</span>
+          {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
         </div>
-        <div 
-          className={`nav-item ${activeTab === 'schedule' ? 'active' : ''}`} 
-          onClick={() => handleTabChange('schedule')}
-        >
-          <span className="nav-icon">📅</span>
-          <span>일정</span>
-        </div>
-        <div 
-          className={`nav-item ${activeTab === 'announcements' ? 'active' : ''}`} 
-          onClick={() => handleTabChange('announcements')}
-        >
-          <div className="nav-icon-container">
-            <span className="nav-icon">🔔</span>
-            {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
-          </div>
-          <span>알림</span>
-        </div>
-      </nav>
+        <span>알림</span>
+      </div>
+    </nav>
 
-      {/* ➡️ Right Detail Pane (Dedicated iPad / Tablet / PC Document Viewer) */}
+    {/* ➡️ Right Detail Pane (Dedicated iPad / Tablet / PC Ultra-Fast Document Viewer) */}
     <aside className="workspace-detail-pane">
       {selectedDoc ? (
-        <div className="split-doc-viewer">
-          <div className="split-doc-header">
-            <div className="split-doc-info">
-              <span className="split-doc-badge">PDF</span>
-              <h3>{selectedDoc.title}</h3>
-              <span className="split-doc-meta">
-                {selectedDoc.file_size || ''} {selectedDoc.file_size ? '·' : ''} {new Date(selectedDoc.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 공개
-              </span>
-            </div>
-            <div className="split-doc-actions">
-              <a 
-                href={selectedDoc.url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="btn-split-download"
-                onClick={() => haptic.button()}
-              >
-                📥 원본 열기 / 다운로드
-              </a>
-              <button 
-                className="btn-split-fullscreen"
-                onClick={() => {
-                  haptic.modal();
-                  setViewerUrl(selectedDoc.url);
-                }}
-                title="전체 화면으로 크게 보기"
-              >
-                ⛶ 전체 화면
-              </button>
-            </div>
-          </div>
-          <div className="split-doc-body">
-            <iframe 
-              src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedDoc.url)}&embedded=true`}
-              title={selectedDoc.title}
-              className="split-pdf-iframe"
-            />
-          </div>
-        </div>
+        <FastPdfViewer 
+          key={selectedDoc.id}
+          url={selectedDoc.url} 
+          title={selectedDoc.title} 
+          isSplitView={true}
+        />
       ) : (
         <div className="split-doc-empty">
           <div className="empty-logo-wrap">
