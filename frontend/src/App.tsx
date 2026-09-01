@@ -8,6 +8,7 @@ import './styles/global.css';
 import './styles/components.css';
 import './styles/attendee.css';
 import { requestPushPermission, onForegroundMessage } from './services/messagingService';
+import { firebaseService } from './services/firebaseService';
 
 type TabType = 'agenda' | 'schedule' | 'announcements';
 
@@ -187,6 +188,25 @@ function App() {
       });
   }, []);
 
+  // Live Presence Heartbeat & Attendee Registration Sync
+  useEffect(() => {
+    if (!event?.id) return;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone || false;
+    
+    // 1. If logged in, record attendee registration in Firestore
+    if (isLoggedIn) {
+      firebaseService.recordAttendeeLogin(event.id, voterId, isStandalone);
+    }
+
+    // 2. Send live presence heartbeat immediately and periodically
+    firebaseService.sendPresenceHeartbeat(event.id, voterId, isStandalone, isLoggedIn);
+    const heartbeatTimer = setInterval(() => {
+      firebaseService.sendPresenceHeartbeat(event.id, voterId, isStandalone, isLoggedIn);
+    }, 25000);
+
+    return () => clearInterval(heartbeatTimer);
+  }, [event?.id, isLoggedIn, voterId]);
+
   const handleLogin = async (passcode: string) => {
     haptic.button();
     setLoginError('');
@@ -208,6 +228,9 @@ function App() {
           setToken(data.event.token);
           localStorage.setItem('eventToken', data.event.token);
         }
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone || false;
+        firebaseService.recordAttendeeLogin(data.event.id, voterId, isStandalone);
+        firebaseService.sendPresenceHeartbeat(data.event.id, voterId, isStandalone, true);
       } else {
         haptic.warning();
         setLoginError('접속 비밀번호가 올바르지 않습니다.');

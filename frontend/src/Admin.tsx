@@ -13,6 +13,7 @@ import './styles/admin.css';
 type ViewMode = 'dashboard' | 'management';
 
 import AdminLogin from './AdminLogin';
+import { firebaseService } from './services/firebaseService';
 
 export default function Admin() {
     // Auth State
@@ -23,6 +24,13 @@ export default function Admin() {
     const [events, setEvents] = useState<any[]>([]);
     const [activeEvent, setActiveEvent] = useState<any>(null);
     const [allFiles, setAllFiles] = useState<any[]>([]);
+
+    // Live Presence & Attendee Stats
+    const [liveStats, setLiveStats] = useState({
+        liveCount: 0,
+        registeredCount: 0,
+        standaloneCount: 0
+    });
     const [allLinks, setAllLinks] = useState<any[]>([]);
     const [_votes, _setVotes] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
@@ -139,6 +147,15 @@ export default function Admin() {
                 return (a.day || '').localeCompare(b.day || '') || (a.time || '').localeCompare(b.time || '');
             });
             setSchedules(items);
+        });
+        return () => unsub();
+    }, [activeEvent?.id]);
+
+    // Listen to live presence and registered attendee stats for active event (real-time)
+    useEffect(() => {
+        if (!activeEvent?.id) return;
+        const unsub = firebaseService.subscribeToLiveStats(activeEvent.id, (stats) => {
+            setLiveStats(stats);
         });
         return () => unsub();
     }, [activeEvent?.id]);
@@ -761,9 +778,29 @@ export default function Admin() {
         <>
         <div className="admin-management">
             <header className="admin-header-nav">
-                <button className="btn-back" onClick={() => setViewMode('dashboard')}>← 대시보드로</button>
-                <h1>{activeEvent.name} <small>관리 모드</small></h1>
-                <div className="live-badge">LIVE</div>
+                <div className="header-nav-left">
+                    <button className="btn-back" onClick={() => setViewMode('dashboard')}>← 대시보드로</button>
+                    <h1>{activeEvent.name} <small>관리 모드</small></h1>
+                </div>
+
+                <div className="header-live-stats-bar">
+                    <div className="stat-pill live" title="최근 60초 이내 활동 중인 실시간 접속자 수">
+                        <span className="live-dot-pulse"></span>
+                        <span className="stat-label">현재 실시간 접속</span>
+                        <strong className="stat-val">{liveStats.liveCount}명</strong>
+                    </div>
+
+                    <div className="stat-pill registered" title="비밀번호를 입력하고 입장한 총 로그인(등록) 인원">
+                        <span className="stat-icon">👥</span>
+                        <span className="stat-label">로그인 완료(등록)</span>
+                        <strong className="stat-val">{liveStats.registeredCount}명</strong>
+                        {liveStats.standaloneCount > 0 && (
+                            <span className="stat-sub">(앱설치 {liveStats.standaloneCount}명)</span>
+                        )}
+                    </div>
+
+                    <div className="live-badge">LIVE</div>
+                </div>
             </header>
 
             <div className="management-grid">
