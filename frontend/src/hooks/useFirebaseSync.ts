@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { firebaseService, type EventData } from '../services/firebaseService';
 
 export interface FirebaseSyncOptions {
@@ -7,24 +7,31 @@ export interface FirebaseSyncOptions {
   onFileUpdate?: () => void;
   onLinkUpdate?: () => void;
   onVoteUpdate?: (vote: any) => void;
+  onScheduleUpdate?: (schedules: any[]) => void;
+  onEventUpdate?: (event: EventData) => void;
 }
 
 export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOptions) => {
   const [event, setEvent] = useState<EventData | null>(null);
   const [files, setFiles] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [lastPublishedFile, setLastPublishedFile] = useState<any>(null);
 
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   useEffect(() => {
-    if (!token) return;
+    console.log(`[Firebase] 📡 Starting stable sync for token: ${token || 'active-auto'}`);
 
-    console.log(`[Firebase] 📡 Starting stable sync for token: ${token}`);
-
-    // 1. Subscribe to Event metadata (Announcements, etc.)
+    // 1. Subscribe to Event metadata (Announcements, Passcode changes, etc.)
     const unsubscribeEvent = firebaseService.subscribeToEvent(token, (data) => {
       setEvent(data);
-      if (data.current_announcement && options?.onAnnouncement) {
-        options.onAnnouncement(data.current_announcement);
+      if (data.current_announcement && optionsRef.current?.onAnnouncement) {
+        optionsRef.current.onAnnouncement(data.current_announcement);
+      }
+      if (optionsRef.current?.onEventUpdate) {
+        optionsRef.current.onEventUpdate(data);
       }
     });
 
@@ -44,29 +51,36 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
         // If it's a new file (not just an update), trigger callback
         if (!lastPublishedFile || newest.id !== lastPublishedFile.id) {
           setLastPublishedFile(newest);
-          if (options?.onNewFilePublished && newest.url) {
-            options.onNewFilePublished(newest.url);
+          if (optionsRef.current?.onNewFilePublished && newest.url) {
+            optionsRef.current.onNewFilePublished(newest.url);
           }
         }
       }
-      if (options?.onFileUpdate) options.onFileUpdate();
+      if (optionsRef.current?.onFileUpdate) optionsRef.current.onFileUpdate();
     });
 
     // 3. Subscribe to Links
     const unsubscribeLinks = firebaseService.subscribeToLinks(event.id, (newLinks) => {
       setLinks(newLinks);
-      if (options?.onLinkUpdate) options.onLinkUpdate();
+      if (optionsRef.current?.onLinkUpdate) optionsRef.current.onLinkUpdate();
     });
 
     // 4. Subscribe to Votes
     const unsubscribeVotes = firebaseService.subscribeToVotes(event.id, (vote) => {
-      if (options?.onVoteUpdate) options.onVoteUpdate(vote);
+      if (optionsRef.current?.onVoteUpdate) optionsRef.current.onVoteUpdate(vote);
+    });
+
+    // 5. Subscribe to Schedules
+    const unsubscribeSchedules = firebaseService.subscribeToSchedules(event.id, (newSchedules) => {
+      setSchedules(newSchedules);
+      if (optionsRef.current?.onScheduleUpdate) optionsRef.current.onScheduleUpdate(newSchedules);
     });
 
     return () => {
       unsubscribeFiles();
       unsubscribeLinks();
       unsubscribeVotes();
+      unsubscribeSchedules();
     };
   }, [event?.id]);
 
@@ -74,7 +88,9 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
     event,
     files,
     links,
+    schedules,
     setFiles,
-    setLinks
+    setLinks,
+    setSchedules
   };
 };

@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "prok-ga"
+    "default": "prok-digitalga",
+    "prok-ga": "prok-ga"
   }
 }

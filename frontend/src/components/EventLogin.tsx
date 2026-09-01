@@ -18,6 +18,7 @@ export const EventLogin = ({ eventName, onLogin, error }: EventLoginProps) => {
     return (
         <div className="login-container">
             <div className="login-card">
+                <img src="/prok-logo.png" alt="한국기독교장로회 로고" className="login-logo-img" />
                 <h1>{eventName}</h1>
                 <p>참석을 위해 암호를 입력해주세요.</p>
                 <form onSubmit={handleSubmit}>

@@ -55,7 +55,7 @@ export const PWAInstallGuide = () => {
             {platform === 'android' && deferredPrompt && (
                 <div className="android-banner">
                     <div className="guide-content">
-                        <span className="pwa-icon">📱</span>
+                        <img src="/icon-192.png" alt="앱 아이콘" className="pwa-install-logo-img" />
                         <div className="guide-text">
                             <strong>디지털 총회 앱 설치</strong>
                             <span>홈 화면에 추가하여 앱처럼 편리하게 사용하세요.</span>

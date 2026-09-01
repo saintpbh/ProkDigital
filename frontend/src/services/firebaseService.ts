@@ -25,8 +25,10 @@ export const firebaseService = {
   /**
    * Listen to a specific event and its metadata in real-time
    */
-  subscribeToEvent: (token: string, onUpdate: (data: EventData) => void) => {
-    const q = query(collection(db, 'events'), where('token', '==', token));
+  subscribeToEvent: (token: string | null, onUpdate: (data: EventData) => void) => {
+    const q = token && token !== 'auto'
+      ? query(collection(db, 'events'), where('token', '==', token))
+      : query(collection(db, 'events'), where('is_active', '==', true));
     
     return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
       if (!snapshot.empty) {
@@ -94,6 +96,28 @@ export const firebaseService = {
       } else {
         onUpdate(null);
       }
+    });
+  },
+
+  /**
+   * Listen to schedules for an event in real-time
+   */
+  subscribeToSchedules: (eventId: string, onUpdate: (schedules: any[]) => void) => {
+    const q = query(
+      collection(db, 'schedules'),
+      where('eventId', '==', eventId)
+    );
+
+    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort by order or day + time
+      items.sort((a: any, b: any) => {
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        return (a.day || '').localeCompare(b.day || '') || (a.time || '').localeCompare(b.time || '');
+      });
+      onUpdate(items);
     });
   }
 };

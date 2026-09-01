@@ -22,7 +22,8 @@ export const requestPushPermission = async (eventId: string, delegateId: string)
     }
 
     const messaging = getMessaging(app);
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const options = (VAPID_KEY && VAPID_KEY !== 'YOUR_VAPID_KEY_HERE') ? { vapidKey: VAPID_KEY } : undefined;
+    const token = await getToken(messaging, options);
     
     if (token) {
       console.log('FCM Token generated successfully.');

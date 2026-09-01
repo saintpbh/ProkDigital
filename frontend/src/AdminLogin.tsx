@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { db } from './lib/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import './components/EventLogin.css';
+import './styles/global.css';
+import './styles/components.css';
+import './styles/admin.css';
 
 interface AdminLoginProps {
     onLogin: (username: string) => void;
@@ -13,7 +15,6 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initial seeding check: Create default 'admin'/'1234' if collection is empty
     useEffect(() => {
         const checkSeeding = async () => {
             try {
@@ -67,18 +68,18 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
     };
 
     if (isLoading && !username) {
-         return <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', background: '#e2e8f0', color: '#0f172a', fontWeight: 'bold' }}>시스템 연결 중...</div>;
+         return <div className="loading-container">시스템 연결 중...</div>;
     }
 
     return (
-        <div className="login-screen" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)' }}>
-            <div className="login-card" style={{ maxWidth: '400px', margin: 'auto' }}>
-                <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                    <h1 style={{ color: '#0f172a', margin: '0 0 10px 0', fontSize: '1.8rem', fontWeight: '800' }}>디지털 총회 관제 로그</h1>
-                    <p className="login-desc" style={{ color: '#475569', margin: 0 }}>관리자 전용 접근 채널입니다.</p>
+        <div className="admin-login-screen">
+            <div className="admin-login-card">
+                <div className="admin-login-header">
+                    <h1>디지털 총회 관제 로그</h1>
+                    <p>관리자 전용 접근 채널입니다.</p>
                 </div>
 
-                <form onSubmit={handleLogin} className="login-form">
+                <form onSubmit={handleLogin} className="admin-login-form">
                     <div className="input-group">
                         <input
                             type="text"
@@ -97,11 +98,11 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
                             disabled={isLoading}
                         />
                     </div>
-                    {error && <div className="error-message" style={{ margin: '10px 0', padding: '10px', background: '#fee2e2', color: '#be123c', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', textAlign: 'center' }}>{error}</div>}
-                    <button type="submit" className="btn-login" disabled={isLoading} style={{ marginTop: '20px' }}>
+                    {error && <div className="error-msg">{error}</div>}
+                    <button type="submit" className="btn-login" disabled={isLoading}>
                         {isLoading ? '인증 확인 중...' : '관리자 접속'}
                     </button>
-                    <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.8rem', color: '#94a3b8' }}>초기 아이디: admin / 비밀번호: 1234</p>
+                    <p className="admin-login-hint">초기 아이디: admin / 비밀번호: 1234</p>
                 </form>
             </div>
         </div>

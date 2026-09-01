@@ -1,20 +1,23 @@
 {
-  "name": "디지털 총회 (ProkDigital)",
+  "name": "한국기독교장로회 디지털 총회",
   "short_name": "디지털총회",
-  "description": "한국기독교장로회 디지털 총회 투표 및 안건지 시스템",
+  "description": "한국기독교장로회 디지털 총회 문서 및 회무 일정 시스템",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#1a237e",
+  "theme_color": "#1e3f82",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

@@ -5,6 +5,10 @@ import {
     query, orderBy, where, serverTimestamp, Timestamp, getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { useModal, ModalDialog } from './components/ModalDialog';
+import './styles/global.css';
+import './styles/components.css';
+import './styles/admin.css';
 
 type ViewMode = 'dashboard' | 'management';
 
@@ -20,7 +24,8 @@ export default function Admin() {
     const [activeEvent, setActiveEvent] = useState<any>(null);
     const [allFiles, setAllFiles] = useState<any[]>([]);
     const [allLinks, setAllLinks] = useState<any[]>([]);
-    const [votes, setVotes] = useState<any[]>([]);
+    const [_votes, _setVotes] = useState<any[]>([]);
+    const [schedules, setSchedules] = useState<any[]>([]);
     const [announcement, setAnnouncement] = useState('');
     
     // File upload state
@@ -32,16 +37,26 @@ export default function Admin() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newEventName, setNewEventName] = useState('');
 
-    // Modal state for Passcode Modification
-    const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
-    const [newPasscode, setNewPasscode] = useState('');
+    // Schedule Modals & Forms
+    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+    const [isBatchScheduleModalOpen, setIsBatchScheduleModalOpen] = useState(false);
+    const [batchScheduleText, setBatchScheduleText] = useState('');
+    const [editingSchedule, setEditingSchedule] = useState<any>(null);
+    const [scheduleForm, setScheduleForm] = useState({
+        day: '1일차',
+        time: '',
+        title: '',
+        location: '',
+        description: ''
+    });
 
     // Admin Auth & Account Modals
-    const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-    const [adminNewPassword, setAdminNewPassword] = useState('');
     const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
     const [newAdminUsername, setNewAdminUsername] = useState('');
     const [newAdminPassword, setNewAdminPassword] = useState('');
+
+    // Generic Modal Hook
+    const { modal, showAlert, showConfirm, showPrompt, close: closeModal } = useModal();
 
     // Restore saved view mode and auth session on mount
     useEffect(() => {
@@ -113,13 +128,17 @@ export default function Admin() {
         return () => unsub();
     }, [activeEvent?.id]);
 
-    // Listen to votes for active event (real-time)
+    // Listen to schedules for active event (real-time)
     useEffect(() => {
         if (!activeEvent) return;
-        const q = query(collection(db, 'votes'), where('eventId', '==', activeEvent.id));
+        const q = query(collection(db, 'schedules'), where('eventId', '==', activeEvent.id));
         const unsub = onSnapshot(q, (snapshot) => {
-            const voteList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setVotes(voteList);
+            const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            items.sort((a: any, b: any) => {
+                if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+                return (a.day || '').localeCompare(b.day || '') || (a.time || '').localeCompare(b.time || '');
+            });
+            setSchedules(items);
         });
         return () => unsub();
     }, [activeEvent?.id]);
@@ -148,7 +167,7 @@ export default function Admin() {
             setNewEventName('');
         } catch (err) {
             console.error('Failed to create event:', err);
-            alert('행사 생성에 실패했습니다.');
+            showAlert('행사 생성에 실패했습니다.');
         }
     };
 
@@ -160,12 +179,12 @@ export default function Admin() {
             }
         } catch (err) {
             console.error('Failed to update event:', err);
-            alert('행사 업데이트에 실패했습니다.');
+            showAlert('행사 업데이트에 실패했습니다.');
         }
     };
 
     const handleDeleteEvent = async (id: string) => {
-        if (!window.confirm('정말로 이 행사를 영구적으로 삭제하시겠습니까? 관련 된 모든 데이터가 사라집니다.')) return;
+        if (!(await showConfirm('행사 삭제', '정말로 이 행사를 영구적으로 삭제하시겠습니까? 관련된 모든 데이터가 사라집니다.'))) return;
         try {
             await deleteDoc(doc(db, 'events', id));
             if (activeEvent?.id === id) {
@@ -184,28 +203,43 @@ export default function Admin() {
     const handleSendAnnouncement = async () => {
         if (!activeEvent || !announcement) return;
         try {
-            // Update the event document with the announcement
-            // Use the token as the doc ID for delegates to find
-            // First update the event doc
             await updateDoc(doc(db, 'events', activeEvent.id), {
                 current_announcement: announcement,
             });
-            alert('공지가 발송되었습니다.');
+            showAlert('공지가 발송되었습니다.');
             setAnnouncement('');
         } catch (err) {
             console.error('Failed to send announcement:', err);
-            alert('공지 발송에 실패했습니다.');
+            showAlert('공지 발송에 실패했습니다.');
         }
     };
 
     // ==========================================
-    // File Operations (Firebase Storage + Firestore)
+    // File Operations & CDN Warmup
     // ==========================================
+
+    const warmupFile = async (url: string, fileId: string, silent = false) => {
+        setIsWarmingUp(fileId);
+        try {
+            // Perform concurrent fetches to pull file into edge caches
+            const warmups = Array.from({ length: 5 }).map(() => 
+                fetch(url, { mode: 'no-cors', cache: 'reload' })
+            );
+            await Promise.all(warmups);
+            if (!silent) {
+                showAlert('🔥 CDN 웜업 완료!', '에지 서버 캐싱이 완료되어 모든 대의원이 지연 없이 즉시 열람할 수 있습니다.');
+            }
+        } catch (error) {
+            console.error('Warmup failed:', error);
+        } finally {
+            setIsWarmingUp(null);
+        }
+    };
 
     const handleFileUpload = (file: File) => {
         if (!activeEvent) return;
         if (file.type !== 'application/pdf') {
-            alert('PDF 파일만 업로드 가능합니다.');
+            showAlert('PDF 파일만 업로드 가능합니다.');
             return;
         }
 
@@ -223,7 +257,7 @@ export default function Admin() {
             },
             (error) => {
                 console.error('Upload failed:', error);
-                alert('파일 업로드에 실패했습니다.');
+                showAlert('파일 업로드에 실패했습니다.');
                 setIsUploading(false);
             },
             async () => {
@@ -231,7 +265,7 @@ export default function Admin() {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 
                 // Store file metadata in Firestore
-                await addDoc(collection(db, 'files'), {
+                const newDocRef = await addDoc(collection(db, 'files'), {
                     eventId: activeEvent.id,
                     title: file.name.replace('.pdf', ''),
                     url: downloadURL,
@@ -243,22 +277,172 @@ export default function Admin() {
 
                 setIsUploading(false);
                 setUploadProgress(0);
+
+                // Auto-warmup CDN immediately upon upload
+                warmupFile(downloadURL, newDocRef.id, true);
+                showAlert('업로드 완료 (자동 웜업됨)', `[${file.name}] 업로드가 완료되었습니다.\n기본 [공유 대기] 상태이며, [공유하기] 버튼을 누르면 총대들에게 즉시 공유됩니다.`);
             }
         );
     };
 
+    // ==========================================
+    // Schedule Operations (Firestore)
+    // ==========================================
+
+    const openAddScheduleModal = () => {
+        setEditingSchedule(null);
+        setScheduleForm({ day: '1일차', time: '', title: '', location: '', description: '' });
+        setIsScheduleModalOpen(true);
+    };
+
+    const openEditScheduleModal = (item: any) => {
+        setEditingSchedule(item);
+        setScheduleForm({
+            day: item.day || '1일차',
+            time: item.time || '',
+            title: item.title || '',
+            location: item.location || '',
+            description: item.description || ''
+        });
+        setIsScheduleModalOpen(true);
+    };
+
+    const handleSaveScheduleSubmit = async () => {
+        if (!activeEvent?.id) return;
+        if (!scheduleForm.title.trim()) {
+            showAlert('일정명을 입력해 주세요.');
+            return;
+        }
+        try {
+            if (editingSchedule) {
+                await updateDoc(doc(db, 'schedules', editingSchedule.id), {
+                    day: scheduleForm.day.trim(),
+                    time: scheduleForm.time.trim(),
+                    title: scheduleForm.title.trim(),
+                    location: scheduleForm.location.trim(),
+                    description: scheduleForm.description.trim(),
+                    updated_at: serverTimestamp()
+                });
+                showAlert('일정 수정 완료', '일정이 성공적으로 수정되었습니다.');
+            } else {
+                await addDoc(collection(db, 'schedules'), {
+                    eventId: activeEvent.id,
+                    day: scheduleForm.day.trim(),
+                    time: scheduleForm.time.trim(),
+                    title: scheduleForm.title.trim(),
+                    location: scheduleForm.location.trim(),
+                    description: scheduleForm.description.trim(),
+                    is_current: false,
+                    order: schedules.length + 1,
+                    created_at: serverTimestamp()
+                });
+                showAlert('일정 등록 완료', '새 일정이 등록되었습니다.');
+            }
+            setIsScheduleModalOpen(false);
+        } catch (err) {
+            console.error('Failed to save schedule:', err);
+            showAlert('일정 저장에 실패했습니다.');
+        }
+    };
+
+    const toggleCurrentSchedule = async (id: string, currentStatus: boolean) => {
+        if (!activeEvent?.id) return;
+        try {
+            if (!currentStatus) {
+                for (const s of schedules) {
+                    if (s.is_current && s.id !== id) {
+                        await updateDoc(doc(db, 'schedules', s.id), { is_current: false });
+                    }
+                }
+            }
+            await updateDoc(doc(db, 'schedules', id), { is_current: !currentStatus });
+            showAlert(
+                !currentStatus ? '현재 진행 일정 설정' : '현재 진행 일정 해제',
+                !currentStatus ? '해당 일정이 대의원 화면에 [진행 중(NOW)]으로 강조 표시됩니다.' : '진행 중 표시가 해제되었습니다.'
+            );
+        } catch (err) {
+            console.error('Failed to toggle current schedule:', err);
+        }
+    };
+
+    const deleteSchedule = async (id: string) => {
+        if (!(await showConfirm('일정 삭제', '이 일정을 삭제하시겠습니까?'))) return;
+        try {
+            await deleteDoc(doc(db, 'schedules', id));
+        } catch (err) {
+            console.error('Failed to delete schedule:', err);
+            showAlert('일정 삭제에 실패했습니다.');
+        }
+    };
+
+    const handleBatchScheduleSubmit = async () => {
+        if (!activeEvent?.id || !batchScheduleText.trim()) return;
+        const lines = batchScheduleText.trim().split('\n');
+        let count = 0;
+        try {
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                let parts: string[] = [];
+                if (line.includes('|')) parts = line.split('|').map(s => s.trim());
+                else if (line.includes('\t')) parts = line.split('\t').map(s => s.trim());
+                else if (line.includes(',')) parts = line.split(',').map(s => s.trim());
+                else parts = [line];
+
+                const day = parts[0] || '1일차';
+                const time = parts[1] || '';
+                const title = parts[2] || parts[0];
+                const location = parts[3] || '';
+                const description = parts[4] || '';
+
+                await addDoc(collection(db, 'schedules'), {
+                    eventId: activeEvent.id,
+                    day,
+                    time,
+                    title,
+                    location,
+                    description,
+                    is_current: false,
+                    order: schedules.length + count + 1,
+                    created_at: serverTimestamp()
+                });
+                count++;
+            }
+            setIsBatchScheduleModalOpen(false);
+            setBatchScheduleText('');
+            showAlert('일괄 등록 완료', `${count}개의 일정이 성공적으로 등록되었습니다.`);
+        } catch (err) {
+            console.error('Batch schedule error:', err);
+            showAlert('일정 일괄 등록 중 오류가 발생했습니다.');
+        }
+    };
+
     const toggleFile = async (id: string, currentPublic: boolean) => {
-        await updateDoc(doc(db, 'files', id), { is_public: !currentPublic });
+        try {
+            const nextPublic = !currentPublic;
+            await updateDoc(doc(db, 'files', id), { 
+                is_public: nextPublic,
+                published_at: serverTimestamp() 
+            });
+            if (nextPublic) {
+                showAlert('문서 공유 시작', '문서가 모든 대의원의 모바일 화면에 실시간으로 공유되었습니다.');
+            } else {
+                showAlert('문서 공유 중지', '문서 공유가 중지되었습니다. 대의원 화면에서 숨겨집니다.');
+            }
+        } catch (err) {
+            console.error('Failed to toggle file sharing:', err);
+            showAlert('공유 상태 변경에 실패했습니다.');
+        }
     };
 
     const renameFile = async (id: string, oldTitle: string) => {
-        const newTitle = prompt('새 파일 이름을 입력하세요', oldTitle);
+        const newTitle = await showPrompt('새 파일 이름을 입력하세요', oldTitle);
         if (!newTitle || newTitle === oldTitle) return;
         await updateDoc(doc(db, 'files', id), { title: newTitle });
     };
 
     const deleteFile = async (id: string, storagePath?: string) => {
-        if (!window.confirm('정말로 삭제하시겠습니까?')) return;
+        if (!(await showConfirm('파일 삭제', '정말로 삭제하시겠습니까?'))) return;
         try {
             // Delete from Storage if path exists
             if (storagePath) {
@@ -280,82 +464,76 @@ export default function Admin() {
     // ==========================================
 
     const addLink = async () => {
-        const title = prompt('링크 제목을 입력하세요');
-        const url = prompt('URL 주소를 입력하세요');
-        if (!title || !url) return;
+        const title = await showPrompt('링크 제목을 입력하세요');
+        if (!title) return;
+        const url = await showPrompt('URL 주소를 입력하세요');
+        if (!url) return;
         await addDoc(collection(db, 'links'), {
             eventId: activeEvent.id,
             title,
             url,
-            is_public: true,
+            is_public: false,
             published_at: serverTimestamp(),
         });
+        showAlert('링크 추가 완료', '새 링크가 [공유 대기] 상태로 추가되었습니다. [공유하기] 버튼을 누르면 대의원 화면에 즉시 노출됩니다.');
     };
 
     const toggleLink = async (id: string, currentPublic: boolean) => {
-        await updateDoc(doc(db, 'links', id), { is_public: !currentPublic });
+        try {
+            const nextPublic = !currentPublic;
+            await updateDoc(doc(db, 'links', id), { 
+                is_public: nextPublic,
+                published_at: serverTimestamp() 
+            });
+            if (nextPublic) {
+                showAlert('링크 공유 시작', '링크가 모든 대의원 화면에 실시간으로 노출됩니다.');
+            } else {
+                showAlert('링크 공유 중지', '링크 공유가 중지되었습니다.');
+            }
+        } catch (err) {
+            console.error('Failed to toggle link sharing:', err);
+            showAlert('공유 상태 변경에 실패했습니다.');
+        }
     };
 
     const renameLink = async (id: string, oldTitle: string) => {
-        const newTitle = prompt('새 링크 이름을 입력하세요', oldTitle);
+        const newTitle = await showPrompt('새 링크 이름을 입력하세요', oldTitle);
         if (!newTitle || newTitle === oldTitle) return;
         await updateDoc(doc(db, 'links', id), { title: newTitle });
     };
 
     const deleteLink = async (id: string) => {
-        if (!confirm('삭제할까요?')) return;
+        if (!(await showConfirm('링크 삭제', '삭제할까요?'))) return;
         await deleteDoc(doc(db, 'links', id));
     };
 
     // ==========================================
-    // Vote Operations (Firestore)
+    // Vote Operations (Firestore) - Commented out
     // ==========================================
-
-    const addVote = async () => {
-        const question = prompt('투표 안건을 입력하세요');
-        if (!question) return;
-        const type = confirm('다지선다 투표입니까? (취소 시 가/부 투표)') ? 'MULTIPLE' : 'YN';
-        let options: string[] = [];
-        if (type === 'MULTIPLE') {
-            const optStr = prompt('선택지들을 콤마(,)로 구분하여 입력하세요 (예: 찬성,반대,기권)');
-            if (!optStr) return;
-            options = optStr.split(',').map(s => s.trim());
-        } else {
-            options = ['찬성', '반대'];
-        }
-
-        await addDoc(collection(db, 'votes'), {
-            eventId: activeEvent.id,
-            question,
-            type,
-            options: options.map((label, i) => ({ id: i + 1, label })),
-            status: 'WAITING',
-            show_results: false,
-            voted_count: 0,
-            created_at: serverTimestamp(),
-        });
-    };
-
-    const updateVoteStatus = async (id: string, status: string) => {
-        await updateDoc(doc(db, 'votes', id), { status });
-    };
-
-    const toggleVoteResults = async (id: string, show: boolean) => {
-        await updateDoc(doc(db, 'votes', id), { show_results: show });
-    };
-
-    const deleteVote = async (id: string) => {
-        if (!confirm('투표를 삭제할까요?')) return;
-        await deleteDoc(doc(db, 'votes', id));
-    };
+    /*
+    const addVote = async () => { ... };
+    const updateVoteStatus = async (id: string, status: string) => { ... };
+    const toggleVoteResults = async (id: string, show: boolean) => { ... };
+    const deleteVote = async (id: string) => { ... };
+    */
 
     // ==========================================
     // QR Code / Share URL Generation (Client-side)
     // ==========================================
     
+    const CUSTOM_DOMAIN = 'https://digital.prok.or.kr';
+
     const getJoinUrl = () => {
+        return CUSTOM_DOMAIN;
+    };
+
+    const getFallbackJoinUrl = () => {
         if (!activeEvent?.token) return '';
         return `${window.location.origin}/join/${activeEvent.token}`;
+    };
+
+    const getQrCodeUrl = (url: string, size = 280) => {
+        return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&margin=8&format=svg`;
     };
 
     // ==========================================
@@ -374,21 +552,21 @@ export default function Admin() {
         setLoggedInAdminId('');
     };
 
-    const handleChangeAdminPasswordSubmit = async () => {
-        if (!adminNewPassword.trim()) return;
-        try {
-            const q = query(collection(db, 'admins'), where('username', '==', loggedInAdminId));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                const docId = snap.docs[0].id;
-                await updateDoc(doc(db, 'admins', docId), { password: adminNewPassword.trim() });
-                alert('비밀번호가 성공적으로 변경되었습니다.');
-                setIsChangePasswordModalOpen(false);
-                setAdminNewPassword('');
+    const handleUpdateAdminPassword = async (username: string) => {
+        const newPass = await showPrompt('비밀번호 변경', '', `[${username}] 계정의 새 비밀번호를 입력하세요:`);
+        if (newPass !== null && newPass.trim()) {
+            try {
+                const q = query(collection(db, 'admins'), where('username', '==', username));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const docId = snap.docs[0].id;
+                    await updateDoc(doc(db, 'admins', docId), { password: newPass.trim() });
+                    showAlert('비밀번호가 성공적으로 변경되었습니다.');
+                }
+            } catch (e) {
+                console.error(e);
+                showAlert('비밀번호 변경 중 오류가 발생했습니다.');
             }
-        } catch(e) {
-            console.error(e);
-            alert('비밀번호 변경 실패');
         }
     };
 
@@ -398,7 +576,7 @@ export default function Admin() {
             const q = query(collection(db, 'admins'), where('username', '==', newAdminUsername.trim()));
             const snap = await getDocs(q);
             if (!snap.empty) {
-                alert('이미 존재하는 관리자 아이디입니다.');
+                showAlert('이미 존재하는 관리자 아이디입니다.');
                 return;
             }
             await addDoc(collection(db, 'admins'), {
@@ -407,13 +585,13 @@ export default function Admin() {
                 role: 'manager',
                 created_at: serverTimestamp(),
             });
-            alert(`새 관리자 계정(${newAdminUsername.trim()})이 발급되었습니다.`);
+            showAlert(`새 관리자 계정(${newAdminUsername.trim()})이 발급되었습니다.`);
             setIsCreateAdminModalOpen(false);
             setNewAdminUsername('');
             setNewAdminPassword('');
         } catch(e) {
             console.error(e);
-            alert('관리자 생성 실패');
+            showAlert('관리자 생성 실패');
         }
     };
 
@@ -426,16 +604,20 @@ export default function Admin() {
         const pastEvents = events.slice(6);
 
         return (
+            <>
             <div className="admin-dashboard">
                 <header className="admin-header">
-                    <div>
-                        <h1 style={{ color: '#0f172a', marginBottom: '8px' }}>디지털 총회 관제 센터</h1>
-                        <p style={{ fontSize: '0.85rem', color: '#1e3a8a', fontWeight: 'bold', marginBottom: '15px' }}>
-                            v2.5.4-프리미엄 대비 UI 완전 적용 (2026.03.18)
-                        </p>
-                        <p style={{ color: '#334155', fontWeight: '500' }}>반갑습니다, 관리자님. 운영할 행사를 선택하거나 새로 추가해 주세요.</p>
+                    <div className="admin-brand-group">
+                        <img src="/prok-logo.png" alt="기장 로고" className="admin-logo-img" />
+                        <div>
+                            <h1>디지털 총회 관제 센터</h1>
+                            <p className="version-tag">
+                                한국기독교장로회 총회 관리 시스템
+                            </p>
+                            <p className="welcome-text">반갑습니다, 관리자님. 운영할 행사를 선택하거나 새로 추가해 주세요.</p>
+                        </div>
                     </div>
-                    <div className="stats-badge" style={{ background: '#1e3a8a', color: '#ffffff', border: '2px solid #000000' }}>
+                    <div className="stats-badge">
                         📡 Firebase 온라인 서비스
                     </div>
                 </header>
@@ -455,20 +637,29 @@ export default function Admin() {
                                         <p>{ev.created_at instanceof Timestamp ? ev.created_at.toDate().toLocaleDateString() : new Date(ev.created_at).toLocaleDateString()}</p>
                                     </div>
                                     <div className="card-actions">
-                                        <button title="제목 변경" onClick={() => {
-                                            const n = prompt('새 행사 이름을 입력하세요', ev.name);
+                                        <button title="제목 변경" onClick={async () => {
+                                            const n = await showPrompt('새 행사 이름을 입력하세요', ev.name);
                                             if (n && n !== ev.name) handleUpdateEvent(ev.id, { name: n });
                                         }}>✏️</button>
-                                        <button title="비밀번호 변경" onClick={() => {
-                                            const p = prompt('새 암호를 입력하세요', ev.passcode);
-                                            if (p) handleUpdateEvent(ev.id, { passcode: p });
+                                        <button title="비밀번호 변경" onClick={async () => {
+                                            const p = await showPrompt('접속 비밀번호 변경', ev.passcode || '', '새 접속 비밀번호를 입력해 주세요. 변경 즉시 접속 중인 모든 대의원이 실시간으로 원격 로그아웃됩니다.');
+                                            if (p !== null && p.trim()) {
+                                                const trimmed = p.trim();
+                                                const newVersion = Date.now();
+                                                await handleUpdateEvent(ev.id, { 
+                                                    passcode: trimmed,
+                                                    session_version: newVersion,
+                                                    passcode_updated_at: newVersion 
+                                                });
+                                                showAlert('비밀번호 변경 완료', `[${ev.name}] 행사의 접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 대의원이 실시간으로 원격 로그아웃되었습니다.`);
+                                            }
                                         }}>🔑</button>
                                         <button title="삭제" className="btn-card-del" onClick={() => handleDeleteEvent(ev.id)}>🗑️</button>
                                     </div>
                                 </div>
                             ))}
                             {events.length === 0 && (
-                                <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
+                                <div className="empty-state">
                                     아직 등록된 행사가 없습니다. "+ 새 행사 추가" 버튼을 눌러 시작하세요.
                                 </div>
                             )}
@@ -489,19 +680,19 @@ export default function Admin() {
                         </section>
                     )}
 
-                    <section className="event-section" style={{ marginTop: '50px', borderTop: '2px dashed #94a3b8', paddingTop: '40px' }}>
+                    <section className="event-section security-section">
                         <div className="section-header">
                             <h2>보안 및 계정 관리</h2>
                         </div>
-                        <div className="admin-account-panel" style={{ background: '#f8fafc', border: '2px solid #cbd5e1', borderRadius: '24px', padding: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                        <div className="admin-account-panel">
                             <div>
-                                <h3 style={{ margin: '0 0 8px 0', color: '#0f172a', fontSize: '1.4rem' }}>접속 중인 계정: <span style={{ color: '#2563eb' }}>{loggedInAdminId}</span></h3>
-                                <p style={{ margin: 0, color: '#475569', fontSize: '0.95rem' }}>주기적으로 비밀번호를 변경하여 시스템 보안을 철저히 유지하세요.</p>
+                                <h3>접속 중인 계정: <span className="account-highlight">{loggedInAdminId}</span></h3>
+                                <p>주기적으로 비밀번호를 변경하여 시스템 보안을 철저히 유지하세요.</p>
                             </div>
-                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                                <button onClick={() => setIsChangePasswordModalOpen(true)} style={{ background: '#1e3a8a', color: '#fff', border: 'none', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>내 비밀번호 변경</button>
-                                <button onClick={() => setIsCreateAdminModalOpen(true)} style={{ background: '#ffffff', color: '#1e3a8a', border: '2px solid #1e3a8a', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>새 관리자 발급</button>
-                                <button onClick={handleLogout} style={{ background: '#fee2e2', color: '#be123c', border: '2px solid #be123c', padding: '14px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1rem' }}>시스템 로그아웃</button>
+                            <div className="account-actions">
+                                <button className="btn-primary" onClick={() => handleUpdateAdminPassword(loggedInAdminId)}>내 비밀번호 변경</button>
+                                <button className="btn-secondary" onClick={() => setIsCreateAdminModalOpen(true)}>새 관리자 발급</button>
+                                <button className="btn-danger" onClick={handleLogout}>시스템 로그아웃</button>
                             </div>
                         </div>
                     </section>
@@ -511,83 +702,29 @@ export default function Admin() {
                 {isCreateModalOpen && (
                     <div className="admin-modal-overlay">
                         <div className="admin-modal">
-                            <h3>새로운 행사 추가</h3>
-                            <p>생성할 행사의 이름을 입력해 주세요.</p>
+                            <h3>새 행사 생성</h3>
+                            <p>생성할 행사의 공식 명칭을 입력하세요.</p>
                             <input 
                                 type="text" 
                                 autoFocus
-                                placeholder="예: 2026년 정기 총회" 
+                                placeholder="예: 제111회 기장 총회" 
                                 value={newEventName}
                                 onChange={(e) => setNewEventName(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreateEventSubmit(); }}
                             />
                             <div className="modal-actions">
-                                <button className="btn-cancel" onClick={() => { setIsCreateModalOpen(false); setNewEventName(''); }}>취소</button>
+                                <button className="btn-cancel" onClick={() => setIsCreateModalOpen(false)}>취소</button>
                                 <button className="btn-confirm" onClick={handleCreateEventSubmit}>생성하기</button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* Custom Passcode Change Modal */}
-                {isPasscodeModalOpen && (
-                    <div className="admin-modal-overlay">
-                        <div className="admin-modal">
-                            <h3>접속 비밀번호 변경</h3>
-                            <p>대의원들이 로그인할 때 사용할 새 비밀번호를 입력해 주세요.</p>
-                            <input 
-                                type="text" 
-                                autoFocus
-                                placeholder="예: 4567" 
-                                value={newPasscode}
-                                onChange={(e) => setNewPasscode(e.target.value)}
-                                onKeyDown={(e) => { 
-                                    if (e.key === 'Enter' && newPasscode.trim()) {
-                                        handleUpdateEvent(activeEvent.id, { passcode: newPasscode.trim() });
-                                        setIsPasscodeModalOpen(false);
-                                    } 
-                                }}
-                            />
-                            <div className="modal-actions">
-                                <button className="btn-cancel" onClick={() => { setIsPasscodeModalOpen(false); setNewPasscode(''); }}>취소</button>
-                                <button className="btn-confirm" onClick={() => {
-                                    if (newPasscode.trim()) {
-                                        handleUpdateEvent(activeEvent.id, { passcode: newPasscode.trim() });
-                                        setIsPasscodeModalOpen(false);
-                                    }
-                                }}>변경하기</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Custom Admin Password Change Modal */}
-                {isChangePasswordModalOpen && (
-                    <div className="admin-modal-overlay">
-                        <div className="admin-modal">
-                            <h3>내 비밀번호 변경</h3>
-                            <p>사용하실 새로운 시스템 관리자 접속 비밀번호를 입력해 주세요.</p>
-                            <input 
-                                type="text" 
-                                autoFocus
-                                placeholder="예: admin1234" 
-                                value={adminNewPassword}
-                                onChange={(e) => setAdminNewPassword(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleChangeAdminPasswordSubmit(); }}
-                            />
-                            <div className="modal-actions">
-                                <button className="btn-cancel" onClick={() => { setIsChangePasswordModalOpen(false); setAdminNewPassword(''); }}>취소</button>
-                                <button className="btn-confirm" onClick={handleChangeAdminPasswordSubmit}>변경 완료</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Custom Create Admin Modal */}
+                {/* Create Sub-Admin Modal */}
                 {isCreateAdminModalOpen && (
                     <div className="admin-modal-overlay">
                         <div className="admin-modal">
-                            <h3>새 관리자 계정 발급</h3>
+                            <h3>서브 관리자 계정 발급</h3>
                             <p>발급할 서브 관리자의 접속 아이디와 초기 비밀번호를 설정하세요.</p>
                             <input 
                                 type="text" 
@@ -595,7 +732,6 @@ export default function Admin() {
                                 placeholder="[새 일회용 아이디] 예: sub_admin" 
                                 value={newAdminUsername}
                                 onChange={(e) => setNewAdminUsername(e.target.value)}
-                                style={{ marginBottom: '10px' }}
                             />
                             <input 
                                 type="text" 
@@ -612,33 +748,17 @@ export default function Admin() {
                     </div>
                 )}
 
-                <style>{dashboardStyles}</style>
+
             </div>
+            <ModalDialog modal={modal} onClose={closeModal} />
+            </>
         );
     }
-
-    // ==========================================
-    // Management View Helpers
-    // ==========================================
-    const warmupFile = async (url: string, fileId: string) => {
-        setIsWarmingUp(fileId);
-        try {
-            // Perform 5 concurrent fetches to "pull" the file into local edge nodes
-            const warmups = Array.from({ length: 5 }).map(() => 
-                fetch(url, { mode: 'no-cors', cache: 'reload' })
-            );
-            await Promise.all(warmups);
-            alert('🔥 CDN 웜업 완료! 이제 모든 대의원이 순식간에 다운로드할 수 있습니다.');
-        } catch (error) {
-            console.error('Warmup failed:', error);
-        } finally {
-            setIsWarmingUp(null);
-        }
-    };
 
     const joinUrl = getJoinUrl();
 
     return (
+        <>
         <div className="admin-management">
             <header className="admin-header-nav">
                 <button className="btn-back" onClick={() => setViewMode('dashboard')}>← 대시보드로</button>
@@ -649,7 +769,7 @@ export default function Admin() {
             <div className="management-grid">
                 <aside className="mgmt-sidebar">
                     <section className="announcement-tool">
-                        <h3>📣 실시간 공지 발송</h3>
+                        <h3>실시간 공지 발송</h3>
                         <textarea
                             placeholder="대의원 화면에 즉시 표시될 내용을 입력하세요..."
                             value={announcement}
@@ -667,34 +787,135 @@ export default function Admin() {
 
                     <section className="share-tool">
                         <h3>🔗 접속 및 공유</h3>
+
+                        <div className="qr-code-area">
+                            <img 
+                                src={getQrCodeUrl(joinUrl)} 
+                                alt="QR Code" 
+                                className="qr-code-img"
+                            />
+                            <p className="qr-caption">대의원 접속용 QR 코드</p>
+                        </div>
+
                         <div className="test-url">
-                            <label>대의원 접속 URL</label>
+                            <label>대의원 접속 URL (고정 도메인)</label>
                             <input readOnly value={joinUrl} />
-                            <div style={{ display: 'flex', gap: 5 }}>
+                            <div className="btn-group">
                                 <button onClick={() => {
                                     if (navigator.clipboard && navigator.clipboard.writeText) {
                                         navigator.clipboard.writeText(joinUrl)
-                                            .then(() => alert('주소가 복사되었습니다.'))
-                                            .catch(() => alert('복사 실패. 직접 복사해 주세요.'));
+                                            .then(() => showAlert('주소가 복사되었습니다.'))
+                                            .catch(() => showAlert('복사 실패. 직접 복사해 주세요.'));
                                     }
                                 }}>주소 복사</button>
                                 <button onClick={() => window.open(joinUrl, '_blank')}>열기</button>
                             </div>
                         </div>
-                        <div className="test-url" style={{ marginTop: '20px' }}>
+                        <div className="test-url fallback-url">
+                            <label>직접 접속 URL (토큰 기반)</label>
+                            <input readOnly value={getFallbackJoinUrl()} />
+                        </div>
+                        <div className="test-url passcode-section">
                             <label>현재 접속 비밀번호 (패스코드)</label>
-                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                <input readOnly value={activeEvent?.passcode || '설정안됨'} style={{ flex: 1, fontWeight: '800', letterSpacing: '2px', textAlign: 'center', color: '#1e3a8a', fontSize: '1.2rem' }} />
-                                <button onClick={() => {
-                                    setNewPasscode(activeEvent?.passcode || '');
-                                    setIsPasscodeModalOpen(true);
-                                }} style={{ padding: '12px 20px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}>비밀번호 변경</button>
+                            <div className="passcode-display">
+                                <input className="passcode-input" readOnly value={activeEvent?.passcode || '설정안됨'} />
+                                <button className="btn-primary" onClick={async () => {
+                                    if (!activeEvent?.id) return;
+                                    const p = await showPrompt(
+                                        '접속 비밀번호 변경', 
+                                        activeEvent.passcode || '', 
+                                        '새 접속 비밀번호를 입력해 주세요. [확인]을 누르면 접속 중인 모든 대의원이 화면 새로고침 없이 즉시 원격 로그아웃됩니다.'
+                                    );
+                                    if (p !== null && p.trim()) {
+                                        const trimmed = p.trim();
+                                        const newVersion = Date.now();
+                                        await handleUpdateEvent(activeEvent.id, { 
+                                            passcode: trimmed, 
+                                            session_version: newVersion,
+                                            passcode_updated_at: newVersion 
+                                        });
+                                        showAlert('비밀번호 변경 완료', `접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 대의원 화면이 실시간으로 원격 로그아웃되었습니다.`);
+                                    }
+                                }}>비밀번호 변경</button>
+                                <button className="btn-force-logout" onClick={async () => {
+                                    if (!activeEvent?.id) return;
+                                    if (await showConfirm('전체 원격 로그아웃', '접속 중인 모든 대의원을 화면 새로고침 없이 즉시 원격 로그아웃시키겠습니까?')) {
+                                        const newVersion = Date.now();
+                                        await handleUpdateEvent(activeEvent.id, { 
+                                            session_version: newVersion,
+                                            passcode_updated_at: newVersion 
+                                        });
+                                        showAlert('원격 로그아웃 완료', '모든 대의원 화면이 즉시 원격 로그아웃되었습니다. 다시 접속하려면 비밀번호를 다시 입력해야 합니다.');
+                                    }
+                                }} title="모든 대의원 화면 즉시 원격 로그아웃">⚡ 전체 원격 로그아웃</button>
                             </div>
                         </div>
                     </section>
                 </aside>
 
                 <main className="mgmt-content">
+                    {/* 📅 Schedule Management */}
+                    <section className="content-area">
+                        <div className="area-header">
+                            <h3>📅 총회 일정 관리</h3>
+                            <div className="area-header-actions">
+                                <button className="btn-secondary" onClick={() => setIsBatchScheduleModalOpen(true)}>⚡ 간편 일괄 등록</button>
+                                <button className="btn-primary" onClick={openAddScheduleModal}>+ 새 일정 추가</button>
+                            </div>
+                        </div>
+                        <div className="management-list">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>일차</th>
+                                        <th>시간</th>
+                                        <th>일정명</th>
+                                        <th>장소</th>
+                                        <th>진행 상태</th>
+                                        <th>제어</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {schedules.map(s => (
+                                        <tr key={s.id} className={s.is_current ? 'row-current-highlight' : ''}>
+                                            <td><span className="day-badge">{s.day}</span></td>
+                                            <td><span className="time-badge">{s.time || '-'}</span></td>
+                                            <td>
+                                                <strong>{s.title}</strong>
+                                                {s.description && <div className="sub-desc">{s.description}</div>}
+                                            </td>
+                                            <td><span className="loc-badge">{s.location || '-'}</span></td>
+                                            <td>
+                                                <button 
+                                                    className={`btn-status-toggle ${s.is_current ? 'is-now' : ''}`}
+                                                    onClick={() => toggleCurrentSchedule(s.id, s.is_current)}
+                                                    title="클릭 시 대의원 화면에 현재 진행 중(NOW)으로 강조 표시"
+                                                >
+                                                    {s.is_current ? '🟢 진행 중 (NOW)' : '대기'}
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <div className="btn-group">
+                                                    <button onClick={() => openEditScheduleModal(s)} title="수정">✏️</button>
+                                                    <button className="del" onClick={() => deleteSchedule(s.id)}>삭제</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {schedules.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="empty-state">
+                                                등록된 일정이 없습니다. [+ 새 일정 추가] 또는 [⚡ 간편 일괄 등록] 버튼을 눌러 일정을 등록하세요.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    {/* Vote Management - Currently Hidden as requested */}
+                    {/*
                     <section className="content-area">
                         <div className="area-header">
                             <h3>🗳️ 투표 안건 관리</h3>
@@ -734,11 +955,12 @@ export default function Admin() {
                                             </td>
                                         </tr>
                                     ))}
-                                    {votes.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: '#888' }}>생성된 투표가 없습니다.</td></tr>}
+                                    {votes.length === 0 && <tr><td colSpan={4} className="empty-state">생성된 투표가 없습니다.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
                     </section>
+                    */}
 
                     <section className="content-area">
                         <div className="area-header">
@@ -773,7 +995,7 @@ export default function Admin() {
                                 <div className="upload-prompt">
                                     <span className="icon">📁</span>
                                     <p>여기에 파일을 드래그하여 올리거나 클릭하여 선택하세요.</p>
-                                    <span className="sub">PDF 파일만 가능합니다. (Firebase Storage CDN으로 빠른 전송)</span>
+                                    <span className="sub">PDF 파일만 가능합니다. (업로드 시 자동으로 에지 CDN 웜업이 실행됩니다)</span>
                                 </div>
                             )}
                         </div>
@@ -791,38 +1013,77 @@ export default function Admin() {
                                 <tbody>
                                     {allFiles.map(f => (
                                         <tr key={f.id}>
-                                            <td>{f.title}</td>
-                                            <td>PDF</td>
-                                            <td><span className={`tag ${f.is_public ? 'on' : 'off'}`}>{f.is_public ? '공유중' : '중단'}</span></td>
+                                            <td><strong>{f.title}</strong></td>
+                                            <td><span className="file-type-badge">PDF</span></td>
                                             <td>
-                                                <button onClick={() => renameFile(f.id, f.title)} title="이름 변경">✏️</button>
-                                                <button 
-                                                    onClick={() => toggleFile(f.id, f.is_public)}
-                                                    className={f.is_public ? 'active' : ''}
-                                                >
-                                                    {f.is_public ? '중지' : '공개'}
-                                                </button>
-                                                <button 
-                                                    className={`btn-warmup ${isWarmingUp === f.id ? 'pulsing' : ''}`}
-                                                    onClick={() => warmupFile(f.url, f.id)}
-                                                    disabled={isWarmingUp === f.id}
-                                                    title="CDN 웜업 (에지 서버에 파일 미리 복사)"
-                                                >
-                                                    {isWarmingUp === f.id ? '⏳' : '🔥 웜업'}
-                                                </button>
-                                                <button className="del" onClick={() => deleteFile(f.id, f.storage_path)}>삭제</button>
+                                                <span className={`tag ${f.is_public ? 'on' : 'off'}`}>
+                                                    {f.is_public ? '공유중' : '공유 대기'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="btn-group">
+                                                    <button onClick={() => renameFile(f.id, f.title)} title="이름 변경">✏️</button>
+                                                    {f.is_public ? (
+                                                        <button 
+                                                            onClick={() => toggleFile(f.id, true)}
+                                                            className="btn-share-stop"
+                                                            title="모바일 공유 중지 (대의원 화면에서 숨김)"
+                                                        >
+                                                            공유 중지
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => toggleFile(f.id, false)}
+                                                            className="btn-share-start"
+                                                            title="모바일 즉시 공유 (대의원 화면에 노출)"
+                                                        >
+                                                            공유하기
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        className={`btn-warmup ${isWarmingUp === f.id ? 'pulsing' : ''}`}
+                                                        onClick={() => warmupFile(f.url, f.id)}
+                                                        disabled={isWarmingUp === f.id}
+                                                        title="CDN 웜업 (에지 서버에 파일 미리 복사)"
+                                                    >
+                                                        {isWarmingUp === f.id ? '⏳' : '🔥 웜업'}
+                                                    </button>
+                                                    <button className="del" onClick={() => deleteFile(f.id, f.storage_path)}>삭제</button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
                                     {allLinks.map(l => (
                                         <tr key={l.id}>
-                                            <td>{l.title}</td>
-                                            <td>LINK</td>
-                                            <td><span className={`tag ${l.is_public ? 'on' : 'off'}`}>{l.is_public ? '공유중' : '중단'}</span></td>
+                                            <td><strong>{l.title}</strong></td>
+                                            <td><span className="file-type-badge link">LINK</span></td>
                                             <td>
-                                                <button onClick={() => renameLink(l.id, l.title)}>✏️</button>
-                                                <button onClick={() => toggleLink(l.id, l.is_public)}>{l.is_public ? '중지' : '공개'}</button>
-                                                <button className="del" onClick={() => deleteLink(l.id)}>삭제</button>
+                                                <span className={`tag ${l.is_public ? 'on' : 'off'}`}>
+                                                    {l.is_public ? '공유중' : '공유 대기'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="btn-group">
+                                                    <button onClick={() => renameLink(l.id, l.title)}>✏️</button>
+                                                    {l.is_public ? (
+                                                        <button 
+                                                            onClick={() => toggleLink(l.id, true)}
+                                                            className="btn-share-stop"
+                                                            title="공유 중지 (대의원 화면에서 숨김)"
+                                                        >
+                                                            공유 중지
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => toggleLink(l.id, false)}
+                                                            className="btn-share-start"
+                                                            title="대의원 화면에 즉시 공유"
+                                                        >
+                                                            공유하기
+                                                        </button>
+                                                    )}
+                                                    <button className="del" onClick={() => deleteLink(l.id)}>삭제</button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -832,201 +1093,98 @@ export default function Admin() {
                     </section>
                 </main>
             </div>
-            <style>{managementStyles}</style>
         </div>
+
+        {/* Schedule Add / Edit Modal */}
+        {isScheduleModalOpen && (
+            <div className="admin-modal-overlay">
+                <div className="admin-modal schedule-modal">
+                    <h3>{editingSchedule ? '일정 수정' : '새 일정 추가'}</h3>
+                    <div className="modal-form-group">
+                        <label>일차 / 날짜</label>
+                        <input 
+                            type="text" 
+                            placeholder="예: 1일차, 2일차 또는 9/22(화)" 
+                            value={scheduleForm.day} 
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, day: e.target.value }))}
+                        />
+                    </div>
+                    <div className="modal-form-group">
+                        <label>시간</label>
+                        <input 
+                            type="text" 
+                            placeholder="예: 14:00 - 15:30" 
+                            value={scheduleForm.time} 
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, time: e.target.value }))}
+                        />
+                    </div>
+                    <div className="modal-form-group">
+                        <label>일정명 *</label>
+                        <input 
+                            type="text" 
+                            autoFocus
+                            placeholder="예: 개회예배 및 성찬예식" 
+                            value={scheduleForm.title} 
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
+                        />
+                    </div>
+                    <div className="modal-form-group">
+                        <label>장소</label>
+                        <input 
+                            type="text" 
+                            placeholder="예: 본회의장, 식당, 분과회의실" 
+                            value={scheduleForm.location} 
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, location: e.target.value }))}
+                        />
+                    </div>
+                    <div className="modal-form-group">
+                        <label>비고 / 설명 (선택)</label>
+                        <input 
+                            type="text" 
+                            placeholder="예: 설교: 총회장, 준비위원 참석 요망" 
+                            value={scheduleForm.description} 
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
+                        />
+                    </div>
+                    <div className="modal-actions">
+                        <button className="btn-cancel" onClick={() => setIsScheduleModalOpen(false)}>취소</button>
+                        <button className="btn-confirm" onClick={handleSaveScheduleSubmit}>
+                            {editingSchedule ? '수정 완료' : '일정 등록'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Batch Schedule Modal */}
+        {isBatchScheduleModalOpen && (
+            <div className="admin-modal-overlay">
+                <div className="admin-modal batch-schedule-modal">
+                    <h3>⚡ 일정 간편 일괄 등록</h3>
+                    <p className="modal-hint">
+                        여러 일정을 한 번에 복사해서 붙여넣으세요.<br />
+                        형식: <code>일차 | 시간 | 일정명 | 장소 | 비고</code> (구분자: <code>|</code> 또는 콤마 또는 탭)
+                    </p>
+                    <textarea 
+                        className="batch-textarea"
+                        rows={8}
+                        placeholder={`1일차 | 14:00 - 15:30 | 개회예배 및 성찬예식 | 본회의장 | 설교: 총회장\n1일차 | 15:30 - 17:00 | 회원점명 및 개회선언 | 본회의장\n1일차 | 18:00 - 19:30 | 저녁식사 | 식당\n2일차 | 09:00 - 12:00 | 회무처리 및 각부 보고 | 본회의장`}
+                        value={batchScheduleText}
+                        onChange={(e) => setBatchScheduleText(e.target.value)}
+                    />
+                    <div className="modal-actions">
+                        <button className="btn-cancel" onClick={() => { setIsBatchScheduleModalOpen(false); setBatchScheduleText(''); }}>취소</button>
+                        <button className="btn-confirm" onClick={handleBatchScheduleSubmit}>일괄 등록하기</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        <ModalDialog modal={modal} onClose={closeModal} />
+        </>
     );
 }
 
-const dashboardStyles = `
-    .admin-dashboard { padding: 60px 20px; max-width: 1400px; margin: 0 auto; color: var(--text-main); }
-    .admin-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 60px; animation: fadeInDown 0.6s ease-out; }
-    @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-    .admin-header h1 { font-size: 2.8rem; margin: 0; letter-spacing: -1px; }
-    
-    .stats-badge { 
-      background: #1e3a8a !important; color: #ffffff !important; padding: 12px 24px; border-radius: 40px; 
-      font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; gap: 8px;
-      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-      border: 2px solid #0f172a;
-    }
-
-    .event-section { margin-bottom: 60px; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-    .section-header h2 { font-size: 1.8rem; margin: 0; position: relative; }
-    .section-header h2::after { content: ''; display: block; width: 40px; height: 4px; background: #2563eb; margin-top: 8px; border-radius: 2px; }
-    
-    .btn-add { 
-      background: #1e3a8a; color: #ffffff !important; border: none; padding: 14px 28px; border-radius: 12px; 
-      font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
-    }
-    .btn-add:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(30, 58, 138, 0.4); background: #1e40af; }
-
-    .event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px; }
-    .event-card { 
-      background: #ffffff; border-radius: 24px; border: 3px solid #0f172a; overflow: hidden; 
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      animation: fadeInUp 0.6s ease-out both;
-    }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-    .event-card:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); border-color: #2563eb; }
-    
-    .card-main { padding: 35px; cursor: pointer; position: relative; background: #ffffff; }
-    .event-tag { 
-      font-size: 11px; font-weight: 800; color: #ffffff !important; background: #2563eb; 
-      padding: 4px 12px; border-radius: 20px; margin-bottom: 20px; display: inline-block;
-      text-transform: uppercase; letter-spacing: 1px;
-    }
-    .event-card h3 { margin: 0 0 12px; font-size: 1.5rem; line-height: 1.2; color: #0f172a; }
-    .event-card p { margin: 0; color: #475569; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
-    
-    .card-actions { 
-      background: #f1f5f9; padding: 15px 25px; display: flex; gap: 12px; border-top: 2px solid #334155;
-      justify-content: flex-end;
-    }
-    .card-actions button { 
-      background: #ffffff; border: 2px solid #334155; border-radius: 10px; width: 44px; height: 44px;
-      display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem;
-      transition: all 0.2s; color: #0f172a;
-    }
-    .card-actions button:hover { border-color: #1e3a8a; background: #1e3a8a; color: #ffffff !important; transform: scale(1.1); }
-    .btn-card-del:hover { background: #be123c !important; border-color: #be123c !important; color: #ffffff !important; }
-
-    .event-grid.past { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-    .event-card.mini { 
-      padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; 
-      cursor: pointer; border-radius: 16px; border: 2px solid #94a3b8; background: #ffffff; color: #0f172a;
-    }
-    .event-card.mini h3 { font-size: 1.1rem; margin: 0; }
-    .btn-past-del { background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; transition: color 0.2s; }
-    .btn-past-del:hover { color: #be123c; }
-
-    /* Modal Styles */
-    .admin-modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;
-      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
-      display: flex; align-items: center; justify-content: center;
-      animation: fadeIn 0.2s ease-out;
-    }
-    .admin-modal {
-      background: #ffffff; width: 100%; max-width: 420px; border-radius: 24px; padding: 32px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 2px solid #1e3a8a;
-      animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    
-    .admin-modal h3 { margin: 0 0 10px; font-size: 1.4rem; color: #0f172a; }
-    .admin-modal p { margin: 0 0 20px; font-size: 0.95rem; color: #475569; }
-    .admin-modal input {
-      width: 100%; padding: 14px 16px; border: 2px solid #cbd5e1; border-radius: 12px;
-      font-size: 1.05rem; margin-bottom: 24px; box-sizing: border-box; outline: none; transition: 0.2s;
-    }
-    .admin-modal input:focus { border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1); }
-    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
-    .modal-actions button { padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 1rem; border: none; transition: 0.2s; }
-    .btn-cancel { background: #f1f5f9; color: #475569; }
-    .btn-cancel:hover { background: #e2e8f0; color: #0f172a; }
-    .btn-confirm { background: #1e3a8a; color: #ffffff; }
-    .btn-confirm:hover { background: #1e40af; }
-`;
-
-const managementStyles = `
-    .admin-management { padding: 0; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; }
-    .admin-header-nav { 
-      background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); padding: 20px 40px; 
-      display: flex; align-items: center; border-bottom: 2px solid #334155; gap: 20px;
-      z-index: 10; sticky top: 0;
-    }
-    .btn-back { background: #ffffff; border: 2px solid #334155; padding: 10px 20px; border-radius: 12px; font-weight: 600; color: #0f172a; cursor: pointer; transition: all 0.2s; }
-    .btn-back:hover { background: #f1f5f9; }
-    .admin-header-nav h1 { font-size: 1.6rem; margin: 0; flex: 1; letter-spacing: -0.5px; color: #0f172a; }
-    .admin-header-nav h1 small { font-size: 0.9rem; color: #475569; font-weight: 500; margin-left: 15px; }
-    .live-badge { background: #be123c; color: #ffffff; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; letter-spacing: 1px; animation: pulse 2s infinite; }
-
-    .management-grid { display: grid; grid-template-columns: 360px 1fr; flex: 1; overflow: hidden; }
-    .mgmt-sidebar { background: #ffffff; border-right: 2px solid #334155; padding: 35px; overflow-y: auto; }
-    .mgmt-content { padding: 40px 60px; overflow-y: auto; background: #f1f5f9; }
-
-    .announcement-tool h3, .share-tool h3, .content-area h3 { font-size: 1.1rem; margin: 0 0 20px; font-weight: 800; color: #0f172a; }
-    .announcement-tool textarea { 
-      width: 100%; height: 140px; border: 2px solid #cbd5e1; border-radius: 16px; padding: 18px; 
-      font-family: inherit; margin-bottom: 15px; box-sizing: border-box; font-size: 0.95rem;
-      transition: border-color 0.2s; color: #0f172a; background: #ffffff;
-    }
-    .announcement-tool textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-    .btn-send { background: #1e3a8a; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; width: 100%; cursor: pointer; transition: 0.2s; }
-    .btn-send:hover { background: #1e40af; }
-    
-    .connection-integrity-card { 
-      background: #f8fafc; border-radius: 20px; padding: 25px; margin-top: 30px; 
-      border: 2px solid #cbd5e1; color: #0f172a;
-    }
-    .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 30px; font-weight: 800; font-size: 0.8rem; margin-bottom: 12px; }
-    .status-pill.connected { background: #047857; color: #ffffff; }
-
-    .share-tool { border-top: 2px solid #cbd5e1; margin-top: 30px; padding-top: 30px; }
-    .test-url label { font-size: 0.85rem; color: #475569; display: block; margin-bottom: 8px; font-weight: 600; }
-    .test-url input { 
-      padding: 12px 16px; border: 2px solid #cbd5e1; border-radius: 12px; 
-      font-size: 0.9rem; background: #e2e8f0; color: #0f172a; font-family: monospace; width: 100%; box-sizing: border-box;
-    }
-    .test-url .btn-group { display: flex; gap: 8px; margin-top: 10px; }
-    .test-url .btn-group button { flex: 1; padding: 10px; background: #0f172a; color: #ffffff; border: none; border-radius: 10px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
-    .test-url .btn-group button:hover { background: #334155; }
-
-    .content-area { margin-bottom: 50px; }
-    .area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-    .area-header h3 { margin: 0; }
-    .btn-vote, .btn-link { background: #1e3a8a; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-    .btn-vote:hover, .btn-link:hover { background: #1e40af; box-shadow: 0 4px 12px rgba(30,58,138,0.3); }
-    
-    /* Table Styling */
-    .management-list { 
-      background: #ffffff; border-radius: 20px; border: 2px solid #334155; 
-      overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-    }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 20px 25px; background: #e2e8f0; border-bottom: 2px solid #334155; font-size: 0.85rem; color: #0f172a; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-    td { padding: 20px 25px; border-bottom: 1px solid #cbd5e1; vertical-align: middle; color: #0f172a; font-weight: 600; }
-    tr:last-child td { border-bottom: none; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    tr:hover td { background: #f1f5f9; }
-
-    .tag { padding: 6px 14px; border-radius: 30px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
-    .tag.on { background: #dcfce7; color: #166534; }
-    .tag.off { background: #e2e8f0; color: #475569; }
-    
-    .btn-group button { 
-      background: #ffffff; border: 2px solid #cbd5e1; padding: 8px 16px; border-radius: 10px; 
-      cursor: pointer; margin-right: 8px; font-size: 0.85rem; font-weight: 700; color: #0f172a;
-      transition: all 0.2s;
-    }
-    .btn-group button:hover { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
-    .btn-group button.del { color: #be123c; border-color: #fecdd3; }
-    .btn-group button.del:hover { background: #be123c; color: #ffffff; border-color: #be123c; }
-
-    .btn-warmup { 
-        background: #fff7ed !important; color: #ea580c !important; border: 1px solid #fdba74 !important; 
-        padding: 6px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-right: 8px;
-    }
-    .btn-warmup:hover { background: #ffedd5 !important; }
-    .btn-warmup.pulsing { animation: pulseOrange 1s infinite alternate; }
-    @keyframes pulseOrange { from { opacity: 0.6; } to { opacity: 1; } }
 
 
-    .upload-zone {
-        border: 3px dashed #3b82f6; border-radius: 20px; padding: 60px 40px; text-align: center;
-        background: #ffffff; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 40px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.06); color: #0f172a;
-    }
-    .upload-zone:hover { border-color: #1e3a8a; background: #eff6ff; transform: scale(1.01); }
-    .upload-prompt .icon { font-size: 48px; display: block; margin-bottom: 15px; }
-    .upload-prompt p { margin: 0 0 8px; font-size: 1.15rem; font-weight: 800; color: #0f172a; }
-    .upload-prompt .sub { font-size: 0.95rem; color: #475569; font-weight: 600; }
-    
-    .btn-toggle { background: #ffffff; border: 2px solid #cbd5e1; padding: 8px 16px; border-radius: 10px; cursor: pointer; margin-right: 8px; font-size: 0.85rem; font-weight: 700; color: #0f172a; transition: all 0.2s; }
-    .btn-toggle:hover { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
-    .active, .btn-toggle.active { background: #047857 !important; color: #ffffff !important; border-color: #047857 !important; padding: 8px 16px; border-radius: 10px; cursor: pointer; margin-right: 8px; font-weight: 700;}
 
-`;
