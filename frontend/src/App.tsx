@@ -31,6 +31,7 @@ function App() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
+  const [showViewerHint, setShowViewerHint] = useState(true);
   const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -273,6 +274,17 @@ function App() {
       setSelectedDoc(displayFiles[0]);
     }
   }, [displayFiles, selectedDoc]);
+
+  // Auto-dismiss mobile viewer hint toast after 5 seconds
+  useEffect(() => {
+    if (viewerUrl) {
+      setShowViewerHint(true);
+      const timer = setTimeout(() => {
+        setShowViewerHint(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [viewerUrl]);
 
   // Force Update Handler
   const handleForceUpdate = async () => {
@@ -762,7 +774,7 @@ function App() {
           </div>
         )}
 
-        {/* Integrated PDF Viewer Overlay */}
+        {/* Integrated PDF Viewer Overlay (Mobile only / Modal) */}
         {viewerUrl && (
           <div 
             className="pdf-viewer-overlay" 
@@ -773,16 +785,31 @@ function App() {
           >
             <div className="pdf-viewer-container" onClick={(e) => e.stopPropagation()}>
               <div className="pdf-viewer-header">
-                <h3>문서 열람</h3>
-                <button 
-                  className="btn-close-viewer" 
-                  onClick={() => {
-                    haptic.modal();
-                    setViewerUrl(null);
-                  }}
-                >
-                  닫기
-                </button>
+                <div className="pdf-viewer-title-wrap">
+                  <span className="pdf-badge">PDF</span>
+                  <h3>문서 열람</h3>
+                </div>
+                <div className="pdf-viewer-header-actions">
+                  <button 
+                    className="btn-header-browser" 
+                    onClick={() => {
+                      haptic.button();
+                      window.open(viewerUrl, '_blank');
+                    }}
+                    title="브라우저(원본)로 보기 / 다운로드"
+                  >
+                    🌐 브라우저로 보기
+                  </button>
+                  <button 
+                    className="btn-close-viewer" 
+                    onClick={() => {
+                      haptic.modal();
+                      setViewerUrl(null);
+                    }}
+                  >
+                    닫기
+                  </button>
+                </div>
               </div>
               <div className="pdf-viewer-body">
                 <iframe 
@@ -792,20 +819,20 @@ function App() {
                   height="100%"
                   className="pdf-iframe"
                 />
-              </div>
-              <div className="pdf-viewer-footer">
-                <p className="pdf-viewer-hint">
-                  화면이 잘 보이지 않으면 아래 버튼을 눌러 원본을 확인하세요.
-                </p>
-                <button 
-                  className="btn-full-screen" 
-                  onClick={() => {
-                    haptic.button();
-                    window.open(viewerUrl, '_blank');
-                  }}
-                >
-                  브라우저(원본)로 보기
-                </button>
+
+                {/* Floating 5-second auto-dismissing notice toast */}
+                {showViewerHint && (
+                  <div className="pdf-viewer-floating-toast">
+                    <span>💡 화면이 잘 보이지 않으면 상단 <strong>[🌐 브라우저로 보기]</strong>를 누르세요.</span>
+                    <button 
+                      className="btn-close-toast" 
+                      onClick={() => setShowViewerHint(false)}
+                      title="알림 닫기"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
