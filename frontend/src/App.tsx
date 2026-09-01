@@ -30,6 +30,7 @@ function App() {
   const [announcementHistory, setAnnouncementHistory] = useState<{ id: string, message: string, timestamp: string }[]>([]);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
   const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -266,6 +267,13 @@ function App() {
     setShowPushPrompt(false);
   };
 
+  // Auto-select newest document for iPad / PC Split View
+  useEffect(() => {
+    if (displayFiles.length > 0 && !selectedDoc) {
+      setSelectedDoc(displayFiles[0]);
+    }
+  }, [displayFiles, selectedDoc]);
+
   // Force Update Handler
   const handleForceUpdate = async () => {
     haptic.button();
@@ -320,36 +328,64 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app app-split-workspace">
       <PWAInstallGuide />
       
-      {/* Header with Safe Area Spacing & App Info Button */}
-      <header className="header">
-        <div className="header-brand-wrap">
-          <img src="/prok-logo.png" alt="기장 로고" className="header-logo-img" />
-          <h1>{event.name}</h1>
-        </div>
-        <div className="header-actions">
-          <div className="connection-badge">
-            <span className="dot pulse"></span>
-            REAL-TIME
+      {/* ⬅️ Left Master Pane (Header + Navigation + Content List) */}
+      <div className="workspace-master-pane">
+        {/* Header with Safe Area Spacing & App Info Button */}
+        <header className="header">
+          <div className="header-brand-wrap">
+            <img src="/prok-logo.png" alt="기장 로고" className="header-logo-img" />
+            <h1>{event.name}</h1>
           </div>
-          <button 
-            className="btn-app-info" 
-            onClick={() => {
-              haptic.modal();
-              setIsInfoModalOpen(true);
-            }} 
-            title="앱 정보 및 강제 업데이트"
-          >
-            ℹ️
-          </button>
-        </div>
-      </header>
+          <div className="header-actions">
+            <div className="connection-badge">
+              <span className="dot pulse"></span>
+              REAL-TIME
+            </div>
+            <button 
+              className="btn-app-info" 
+              onClick={() => {
+                haptic.modal();
+                setIsInfoModalOpen(true);
+              }} 
+              title="앱 정보 및 강제 업데이트"
+            >
+              ℹ️
+            </button>
+          </div>
+        </header>
 
-      <main className="container">
-        {/* Real-time Announcement Popup Banner */}
-        {announcement && (
+        {/* 💻 Tablet / Desktop Navigation Tabs (Visible on iPad & PC) */}
+        <nav className="desktop-tab-nav">
+          <button 
+            className={`desktop-tab-btn ${activeTab === 'agenda' ? 'active' : ''}`}
+            onClick={() => handleTabChange('agenda')}
+          >
+            <span className="tab-icon">📑</span>
+            <span>공유 문서</span>
+          </button>
+          <button 
+            className={`desktop-tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+            onClick={() => handleTabChange('schedule')}
+          >
+            <span className="tab-icon">📅</span>
+            <span>회무 일정</span>
+          </button>
+          <button 
+            className={`desktop-tab-btn ${activeTab === 'announcements' ? 'active' : ''}`}
+            onClick={() => handleTabChange('announcements')}
+          >
+            <span className="tab-icon">🔔</span>
+            <span>알림</span>
+            {unreadCount > 0 && <span className="tab-badge">{unreadCount}</span>}
+          </button>
+        </nav>
+
+        <main className="container master-scrollable-content">
+          {/* Real-time Announcement Popup Banner */}
+          {announcement && (
           <div className="announcement-overlay">
             <div className="announcement-content">
               <div className="announcement-text">{announcement}</div>
@@ -413,7 +449,17 @@ function App() {
 
             <h3>공유 문서 (PDF)</h3>
             {displayFiles.map((file: any, index: number) => (
-              <div key={file.id} className="file-card">
+              <div 
+                key={file.id} 
+                className={`file-card ${selectedDoc?.id === file.id ? 'is-selected-card' : ''}`}
+                onClick={() => {
+                  haptic.viewDocument();
+                  setSelectedDoc(file);
+                  if (typeof window !== 'undefined' && window.innerWidth < 900) {
+                    setViewerUrl(file.url);
+                  }
+                }}
+              >
                 <div className="file-info">
                   <div className="title">
                     {file.title}
@@ -425,8 +471,10 @@ function App() {
                 </div>
                 <button 
                   className="btn-view" 
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     haptic.viewDocument();
+                    setSelectedDoc(file);
                     setViewerUrl(file.url);
                   }}
                 >
@@ -769,8 +817,8 @@ function App() {
         )}
       </main>
 
-      {/* 3-Tab Bottom Navigation: 문서, 일정, 알림 */}
-      <nav className="bottom-nav">
+      {/* 3-Tab Bottom Navigation for Mobile (Hidden on iPad / PC) */}
+      <nav className="bottom-nav mobile-tab-nav">
         <div 
           className={`nav-item ${activeTab === 'agenda' ? 'active' : ''}`} 
           onClick={() => handleTabChange('agenda')}
@@ -797,7 +845,62 @@ function App() {
         </div>
       </nav>
     </div>
+
+    {/* ➡️ Right Detail Pane (Dedicated iPad / Tablet / PC Document Viewer) */}
+    <aside className="workspace-detail-pane">
+      {selectedDoc ? (
+        <div className="split-doc-viewer">
+          <div className="split-doc-header">
+            <div className="split-doc-info">
+              <span className="split-doc-badge">PDF</span>
+              <h3>{selectedDoc.title}</h3>
+              <span className="split-doc-meta">
+                {selectedDoc.file_size || ''} {selectedDoc.file_size ? '·' : ''} {new Date(selectedDoc.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 공개
+              </span>
+            </div>
+            <div className="split-doc-actions">
+              <a 
+                href={selectedDoc.url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="btn-split-download"
+                onClick={() => haptic.button()}
+              >
+                📥 원본 열기 / 다운로드
+              </a>
+              <button 
+                className="btn-split-fullscreen"
+                onClick={() => {
+                  haptic.modal();
+                  setViewerUrl(selectedDoc.url);
+                }}
+                title="전체 화면으로 크게 보기"
+              >
+                ⛶ 전체 화면
+              </button>
+            </div>
+          </div>
+          <div className="split-doc-body">
+            <iframe 
+              src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedDoc.url)}&embedded=true`}
+              title={selectedDoc.title}
+              className="split-pdf-iframe"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="split-doc-empty">
+          <div className="empty-logo-wrap">
+            <img src="/prok-logo.png" alt="기장 로고" className="empty-split-logo" />
+          </div>
+          <h3>문서 열람 화면</h3>
+          <p>왼쪽 목록에서 열람하실 회무 문서나 안건지를 선택해 주세요.</p>
+        </div>
+      )}
+    </aside>
+  </div>
   );
 }
 
 export default App;
+
