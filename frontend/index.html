@@ -15,11 +15,35 @@
     <title>한국기독교장로회 디지털 총회</title>
     <script>
       (function() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const targetUrl = window.location.href;
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
         const savedPath = localStorage.getItem('pwa_start_path');
+
         if (isStandalone && window.location.pathname === '/' && savedPath && savedPath !== '/') {
           console.log('[PWA] Early redirect to:', savedPath);
           window.location.replace(savedPath);
+          return;
+        }
+
+        // In-App Browser Auto-Escape (KakaoTalk, Line, Naver, Instagram, etc.)
+        const isKakao = /kakaotalk/i.test(userAgent);
+        const isLine = /line/i.test(userAgent);
+        const isInstagram = /instagram/i.test(userAgent);
+        const isFacebook = /fban|fbav/i.test(userAgent);
+        const isNaver = /naver/i.test(userAgent);
+        const isDaum = /daum/i.test(userAgent);
+        const isInApp = isKakao || isLine || isInstagram || isFacebook || isNaver || isDaum || /inapp|kakaostory|band/i.test(userAgent);
+        const isAndroid = /android/i.test(userAgent);
+
+        if (!isStandalone) {
+          if (isKakao) {
+            // KakaoTalk external browser open scheme (Android & iOS)
+            location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(targetUrl);
+          } else if (isAndroid && isInApp) {
+            // Android Chrome Intent Scheme for other in-app webviews
+            location.href = 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.android.chrome;end';
+          }
         }
       })();
     </script>

@@ -288,7 +288,12 @@ function App() {
   );
 
   if (!isLoggedIn && event.passcode) {
-    return <EventLogin eventName={event.name} onLogin={handleLogin} error={loginError} />;
+    return (
+      <>
+        <PWAInstallGuide />
+        <EventLogin eventName={event.name} onLogin={handleLogin} error={loginError} />
+      </>
+    );
   }
 
   return (
