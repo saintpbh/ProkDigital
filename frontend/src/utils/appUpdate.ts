@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.7.0 (일정 실시간 포커스 및 공지 삭제/초기화 기능 지원)';
+export const APP_VERSION = 'v2.7.1 (알림 스와이프 삭제 및 롱프레스 삭제 제스처 탑재)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

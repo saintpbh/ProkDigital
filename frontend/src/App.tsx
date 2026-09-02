@@ -3,6 +3,7 @@ import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
 import { FastPdfViewer } from './components/FastPdfViewer';
+import { SwipeableAnnouncementCard } from './components/SwipeableAnnouncementCard';
 import { preloadAllPdfs, preloadPdf } from './utils/pdfCache';
 import { haptic } from './utils/haptic';
 import { APP_VERSION, forceUpdateApp } from './utils/appUpdate';
@@ -703,35 +704,15 @@ function App() {
             <div className="announcement-list">
               {announcementHistory.length > 0 ? (
                 announcementHistory.map((item) => (
-                  <div 
-                    key={item.id} 
-                    className="announcement-item-card" 
+                  <SwipeableAnnouncementCard
+                    key={item.id}
+                    item={item}
                     onClick={() => {
                       haptic.modal();
                       setSelectedAnnouncement(item);
                     }}
-                  >
-                    <div className="item-header">
-                      <span className="item-time">
-                        {item.timestamp ? new Date(item.timestamp).toLocaleDateString([], { month: 'numeric', day: 'numeric' }) : ''}{' '}
-                        {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '방금 전'}
-                      </span>
-                      <button 
-                        className="btn-delete-announcement-card"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAnnouncementItem(item.id);
-                        }}
-                        title="이 알림 삭제"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="item-body">
-                      {item.message.length > 45 ? item.message.substring(0, 45) + '...' : item.message}
-                    </div>
-                    <div className="item-footer">자세히 보기 〉</div>
-                  </div>
+                    onDelete={handleDeleteAnnouncementItem}
+                  />
                 ))
               ) : (
                 <div className="empty-state">
