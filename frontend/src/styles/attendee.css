@@ -303,6 +303,45 @@
   animation: fadeInDown var(--duration-normal) var(--ease-out);
 }
 
+/* ── Document Search Bar (Attendee View) ── */
+.doc-search-bar-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 10px 14px;
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+.doc-search-bar-wrap:focus-within {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.doc-search-bar-wrap .search-icon {
+  font-size: 14px;
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+.input-doc-search {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  outline: none;
+}
+.btn-clear-doc-search {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 /* ── File / Link Cards ── */
 .content-list h3 {
   font-size: var(--text-base);

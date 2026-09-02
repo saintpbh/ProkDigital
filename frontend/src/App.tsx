@@ -122,6 +122,7 @@ function App() {
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [docSearchQuery, setDocSearchQuery] = useState('');
   const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
     return Number(localStorage.getItem('last_read_announcement_ts') || 0);
   });
@@ -546,79 +547,111 @@ function App() {
 
 
         {/* 📑 TAB 1: 문서 (공유 문서, 링크, 설문) */}
-        {activeTab === 'agenda' && (
-          <section className="content-list">
-            {displayLinks.length > 0 && (
-              <div className="link-section">
-                <h3>외부 링크 (설문/영상)</h3>
-                {displayLinks.map((link: any) => (
-                  <a 
-                    key={link.id} 
-                    href={link.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="link-card"
-                    onClick={() => haptic.button()}
-                  >
-                    <span className="icon">🔗</span>
-                    <div className="link-info">
-                      <div className="title">{link.title}</div>
-                      <div className="url-hint">
-                        {(() => {
-                          try { return new URL(link.url).hostname; } 
-                          catch { return link.url; }
-                        })()}
-                      </div>
-                    </div>
-                  </a>
-                ))}
-              </div>
-            )}
+        {activeTab === 'agenda' && (() => {
+          const filteredFiles = displayFiles.filter((f: any) =>
+            (f.title || '').toLowerCase().includes(docSearchQuery.toLowerCase())
+          );
+          const filteredLinks = displayLinks.filter((l: any) =>
+            (l.title || '').toLowerCase().includes(docSearchQuery.toLowerCase())
+          );
 
-            <h3>공유 문서 (PDF)</h3>
-            {displayFiles.map((file: any, index: number) => (
-              <div 
-                key={file.id} 
-                className={`file-card ${selectedDoc?.id === file.id ? 'is-selected-card' : ''}`}
-                onClick={() => {
-                  haptic.viewDocument();
-                  setSelectedDoc(file);
-                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                    setViewerUrl(file.url);
-                  }
-                }}
-              >
-                <div className="file-info">
-                  <div className="title">
-                    {file.title}
-                    {index === 0 && <span className="badge-new">NEW</span>}
-                  </div>
-                  <div className="meta">
-                    PDF · {file.file_size || ''} · {new Date(file.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 공개
-                  </div>
+          return (
+            <section className="content-list">
+              {/* Document Search Bar (Shown if 4+ documents exist or when searching) */}
+              {(displayFiles.length + displayLinks.length >= 4 || docSearchQuery) && (
+                <div className="doc-search-bar-wrap">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="text"
+                    className="input-doc-search"
+                    placeholder="문서 제목 또는 안건 검색..."
+                    value={docSearchQuery}
+                    onChange={(e) => setDocSearchQuery(e.target.value)}
+                  />
+                  {docSearchQuery && (
+                    <button
+                      className="btn-clear-doc-search"
+                      onClick={() => setDocSearchQuery('')}
+                      title="검색어 지우기"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-                <button 
-                  className="btn-view" 
-                  onClick={(e) => {
-                    e.stopPropagation();
+              )}
+
+              {filteredLinks.length > 0 && (
+                <div className="link-section">
+                  <h3>외부 링크 (설문/영상)</h3>
+                  {filteredLinks.map((link: any) => (
+                    <a 
+                      key={link.id} 
+                      href={link.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="link-card"
+                      onClick={() => haptic.button()}
+                    >
+                      <span className="icon">🔗</span>
+                      <div className="link-info">
+                        <div className="title">{link.title}</div>
+                        <div className="url-hint">
+                          {(() => {
+                            try { return new URL(link.url).hostname; } 
+                            catch { return link.url; }
+                          })()}
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              <h3>공유 문서 ({filteredFiles.length})</h3>
+              {filteredFiles.map((file: any, index: number) => (
+                <div 
+                  key={file.id} 
+                  className={`file-card ${selectedDoc?.id === file.id ? 'is-selected-card' : ''}`}
+                  onClick={() => {
                     haptic.viewDocument();
                     setSelectedDoc(file);
-                    setViewerUrl(file.url);
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setViewerUrl(file.url);
+                    }
                   }}
                 >
-                  열람
-                </button>
-              </div>
-            ))}
+                  <div className="file-info">
+                    <div className="title">
+                      {file.title}
+                      {index === 0 && !docSearchQuery && <span className="badge-new">NEW</span>}
+                    </div>
+                    <div className="meta">
+                      PDF · {file.file_size || ''} · {file.published_at ? new Date(file.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} 공개
+                    </div>
+                  </div>
+                  <button 
+                    className="btn-view" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      haptic.viewDocument();
+                      setSelectedDoc(file);
+                      setViewerUrl(file.url);
+                    }}
+                  >
+                    열람
+                  </button>
+                </div>
+              ))}
 
-            {displayFiles.length === 0 && displayLinks.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-icon">📂</div>
-                <p>공개된 문서가 없습니다. 잠시만 기다려주세요.</p>
-              </div>
-            )}
-          </section>
-        )}
+              {filteredFiles.length === 0 && filteredLinks.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-icon">📂</div>
+                  <p>{docSearchQuery ? `"${docSearchQuery}" 검색 결과가 없습니다.` : '공개된 문서가 없습니다. 잠시만 기다려주세요.'}</p>
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {/* 📅 TAB 2: 일정 (총회 스케줄 타임라인) */}
         {activeTab === 'schedule' && (

@@ -45,10 +45,13 @@ export default function Admin() {
     const [announcement, setAnnouncement] = useState('');
     const [announcementHistory, setAnnouncementHistory] = useState<any[]>([]);
     
-    // File upload state
+    // File upload & pagination state
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isWarmingUp, setIsWarmingUp] = useState<string | null>(null);
+    const [fileSearchQuery, setFileSearchQuery] = useState('');
+    const [fileCurrentPage, setFileCurrentPage] = useState(1);
+    const FILES_PER_PAGE = 20;
 
     // Modal state for Add Event
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -1090,8 +1093,37 @@ export default function Admin() {
 
                     <section className="content-area">
                         <div className="area-header">
-                            <h3>파일 및 문서 관리</h3>
-                            <button className="btn-link" onClick={addLink}>+ 외부 링크 추가</button>
+                            <div className="area-title-wrap">
+                                <h3>파일 및 문서 관리</h3>
+                                <span className="badge-count">총 {allFiles.length}개 문서</span>
+                            </div>
+                            <div className="header-actions-row">
+                                <div className="admin-search-wrap">
+                                    <input 
+                                        type="text"
+                                        className="input-admin-search"
+                                        placeholder="🔍 문서 제목 검색..."
+                                        value={fileSearchQuery}
+                                        onChange={(e) => {
+                                            setFileSearchQuery(e.target.value);
+                                            setFileCurrentPage(1);
+                                        }}
+                                    />
+                                    {fileSearchQuery && (
+                                        <button 
+                                            className="btn-clear-search"
+                                            onClick={() => {
+                                                setFileSearchQuery('');
+                                                setFileCurrentPage(1);
+                                            }}
+                                            title="검색어 지우기"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                                <button className="btn-link" onClick={addLink}>+ 외부 링크 추가</button>
+                            </div>
                         </div>
 
                         {/* Firebase Storage File Uploader */}
@@ -1132,90 +1164,178 @@ export default function Admin() {
                                     <tr>
                                         <th>제목</th>
                                         <th>구분</th>
+                                        <th>등록 시각</th>
                                         <th>상태</th>
                                         <th>제어</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {allFiles.map(f => (
-                                        <tr key={f.id}>
-                                            <td><strong>{f.title}</strong></td>
-                                            <td><span className="file-type-badge">PDF</span></td>
-                                            <td>
-                                                <span className={`tag ${f.is_public ? 'on' : 'off'}`}>
-                                                    {f.is_public ? '공유중' : '공유 대기'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="btn-group">
-                                                    <button onClick={() => renameFile(f.id, f.title)} title="이름 변경">✏️</button>
-                                                    {f.is_public ? (
-                                                        <button 
-                                                            onClick={() => toggleFile(f.id, true)}
-                                                            className="btn-share-stop"
-                                                            title="모바일 공유 중지 (대의원 화면에서 숨김)"
-                                                        >
-                                                            공유 중지
-                                                        </button>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => toggleFile(f.id, false)}
-                                                            className="btn-share-start"
-                                                            title="모바일 즉시 공유 (대의원 화면에 노출)"
-                                                        >
-                                                            공유하기
-                                                        </button>
-                                                    )}
-                                                    <button 
-                                                        className={`btn-warmup ${isWarmingUp === f.id ? 'pulsing' : ''}`}
-                                                        onClick={() => warmupFile(f.url, f.id)}
-                                                        disabled={isWarmingUp === f.id}
-                                                        title="CDN 웜업 (에지 서버에 파일 미리 복사)"
-                                                    >
-                                                        {isWarmingUp === f.id ? '⏳' : '🔥 웜업'}
-                                                    </button>
-                                                    <button className="del" onClick={() => deleteFile(f.id, f.storage_path)}>삭제</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {allLinks.map(l => (
-                                        <tr key={l.id}>
-                                            <td><strong>{l.title}</strong></td>
-                                            <td><span className="file-type-badge link">LINK</span></td>
-                                            <td>
-                                                <span className={`tag ${l.is_public ? 'on' : 'off'}`}>
-                                                    {l.is_public ? '공유중' : '공유 대기'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="btn-group">
-                                                    <button onClick={() => renameLink(l.id, l.title)}>✏️</button>
-                                                    {l.is_public ? (
-                                                        <button 
-                                                            onClick={() => toggleLink(l.id, true)}
-                                                            className="btn-share-stop"
-                                                            title="공유 중지 (대의원 화면에서 숨김)"
-                                                        >
-                                                            공유 중지
-                                                        </button>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => toggleLink(l.id, false)}
-                                                            className="btn-share-start"
-                                                            title="대의원 화면에 즉시 공유"
-                                                        >
-                                                            공유하기
-                                                        </button>
-                                                    )}
-                                                    <button className="del" onClick={() => deleteLink(l.id)}>삭제</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {(() => {
+                                        const sortedFiles = [...allFiles].sort((a: any, b: any) => {
+                                            const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : new Date(a.created_at || a.published_at || 0).getTime());
+                                            const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : new Date(b.created_at || b.published_at || 0).getTime());
+                                            return timeB - timeA;
+                                        });
+
+                                        const filteredFiles = sortedFiles.filter(f => 
+                                            (f.title || '').toLowerCase().includes(fileSearchQuery.toLowerCase())
+                                        );
+
+                                        const paginatedFiles = filteredFiles.slice((fileCurrentPage - 1) * FILES_PER_PAGE, fileCurrentPage * FILES_PER_PAGE);
+
+                                        return (
+                                            <>
+                                                {paginatedFiles.map(f => {
+                                                    const dateStr = f.created_at?.toDate 
+                                                        ? f.created_at.toDate().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                        : (f.published_at ? new Date(f.published_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
+
+                                                    return (
+                                                        <tr key={f.id}>
+                                                            <td><strong>{f.title}</strong></td>
+                                                            <td><span className="file-type-badge">PDF</span></td>
+                                                            <td><span className="time-sub-badge">{dateStr}</span></td>
+                                                            <td>
+                                                                <span className={`tag ${f.is_public ? 'on' : 'off'}`}>
+                                                                    {f.is_public ? '공유중' : '공유 대기'}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <div className="btn-group">
+                                                                    <button onClick={() => renameFile(f.id, f.title)} title="이름 변경">✏️</button>
+                                                                    {f.is_public ? (
+                                                                        <button 
+                                                                            onClick={() => toggleFile(f.id, true)}
+                                                                            className="btn-share-stop"
+                                                                            title="모바일 공유 중지 (대의원 화면에서 숨김)"
+                                                                        >
+                                                                            공유 중지
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button 
+                                                                            onClick={() => toggleFile(f.id, false)}
+                                                                            className="btn-share-start"
+                                                                            title="모바일 즉시 공유 (대의원 화면에 노출)"
+                                                                        >
+                                                                            공유하기
+                                                                        </button>
+                                                                    )}
+                                                                    <button 
+                                                                        className={`btn-warmup ${isWarmingUp === f.id ? 'pulsing' : ''}`}
+                                                                        onClick={() => warmupFile(f.url, f.id)}
+                                                                        disabled={isWarmingUp === f.id}
+                                                                        title="CDN 웜업 (에지 서버에 파일 미리 복사)"
+                                                                    >
+                                                                        {isWarmingUp === f.id ? '⏳' : '🔥 웜업'}
+                                                                    </button>
+                                                                    <button className="del" onClick={() => deleteFile(f.id, f.storage_path)}>삭제</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+
+                                                {allLinks.map(l => (
+                                                    <tr key={l.id}>
+                                                        <td><strong>{l.title}</strong></td>
+                                                        <td><span className="file-type-badge link">LINK</span></td>
+                                                        <td><span className="time-sub-badge">-</span></td>
+                                                        <td>
+                                                            <span className={`tag ${l.is_public ? 'on' : 'off'}`}>
+                                                                {l.is_public ? '공유중' : '공유 대기'}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="btn-group">
+                                                                <button onClick={() => renameLink(l.id, l.title)}>✏️</button>
+                                                                {l.is_public ? (
+                                                                    <button 
+                                                                        onClick={() => toggleLink(l.id, true)}
+                                                                        className="btn-share-stop"
+                                                                        title="공유 중지 (대의원 화면에서 숨김)"
+                                                                    >
+                                                                        공유 중지
+                                                                    </button>
+                                                                ) : (
+                                                                    <button 
+                                                                        onClick={() => toggleLink(l.id, false)}
+                                                                        className="btn-share-start"
+                                                                        title="대의원 화면에 즉시 공유"
+                                                                    >
+                                                                        공유하기
+                                                                    </button>
+                                                                )}
+                                                                <button className="del" onClick={() => deleteLink(l.id)}>삭제</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+
+                                                {filteredFiles.length === 0 && allLinks.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={5} className="empty-state">
+                                                            {fileSearchQuery ? `"${fileSearchQuery}" 검색 결과가 없습니다.` : '등록된 문서나 링크가 없습니다.'}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* 📄 Pagination Bar (Shown when totalFilePages > 1 or count > 20) */}
+                        {(() => {
+                            const sortedFiles = [...allFiles].sort((a: any, b: any) => {
+                                const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : new Date(a.created_at || a.published_at || 0).getTime());
+                                const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : new Date(b.created_at || b.published_at || 0).getTime());
+                                return timeB - timeA;
+                            });
+
+                            const filteredFiles = sortedFiles.filter(f => 
+                                (f.title || '').toLowerCase().includes(fileSearchQuery.toLowerCase())
+                            );
+
+                            const totalFilePages = Math.ceil(filteredFiles.length / FILES_PER_PAGE) || 1;
+
+                            if (totalFilePages <= 1 && filteredFiles.length <= FILES_PER_PAGE) return null;
+
+                            return (
+                                <div className="admin-pagination-bar">
+                                    <div className="pagination-info">
+                                        총 <strong>{filteredFiles.length}</strong>개 문서 (현재 <strong>{fileCurrentPage}</strong> / {totalFilePages} 페이지)
+                                    </div>
+                                    <div className="pagination-controls">
+                                        <button 
+                                            className="btn-page-arrow"
+                                            disabled={fileCurrentPage === 1}
+                                            onClick={() => setFileCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        >
+                                            ◀ 이전
+                                        </button>
+                                        
+                                        {Array.from({ length: totalFilePages }, (_, i) => i + 1).map(pageNum => (
+                                            <button 
+                                                key={pageNum}
+                                                className={`btn-page-number ${fileCurrentPage === pageNum ? 'active' : ''}`}
+                                                onClick={() => setFileCurrentPage(pageNum)}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        ))}
+
+                                        <button 
+                                            className="btn-page-arrow"
+                                            disabled={fileCurrentPage === totalFilePages}
+                                            onClick={() => setFileCurrentPage(prev => Math.min(prev + 1, totalFilePages))}
+                                        >
+                                            다음 ▶
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </section>
                 </main>
             </div>
