@@ -38,6 +38,11 @@ if (typeof window !== 'undefined') {
  * Trigger cross-platform haptics
  */
 function triggerHaptic(preset: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'warning' | 'error' | 'nudge' | 'buzz', androidFallback: number | number[]) {
+  // Prevent browser intervention warning before user gesture
+  if (typeof navigator !== 'undefined' && (navigator as any).userActivation && !(navigator as any).userActivation.hasBeenActive) {
+    return;
+  }
+
   try {
     const h = getWebHaptics();
     if (h) {

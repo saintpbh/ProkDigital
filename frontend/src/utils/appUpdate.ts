@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.6.1 (웹 내장 뷰어 즉시 열람 & 시스템 팝업 차단)';
+export const APP_VERSION = 'v2.6.2 (PDF.js 로컬 번들 워커 완전 동기화)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

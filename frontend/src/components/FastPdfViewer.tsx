@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { getCachedBlobUrl, getInstantBlobUrl } from '../utils/pdfCache';
 import { haptic } from '../utils/haptic';
 
-// Configure PDF.js Worker to reliable CDN
+// Configure matching bundled PDF.js Worker
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 }
 
 interface FastPdfViewerProps {
@@ -143,7 +144,7 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
 
     const loadingTask = pdfjsLib.getDocument({
       url: blobUrl,
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+      cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '6.3.289'}/cmaps/`,
       cMapPacked: true,
     });
 
