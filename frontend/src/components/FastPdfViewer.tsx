@@ -62,12 +62,11 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   const [resumeToast, setResumeToast] = useState<string | null>(null);
   const [isJumpModalOpen, setIsJumpModalOpen] = useState<boolean>(false);
   const [jumpInputVal, setJumpInputVal] = useState<string>('');
-  const zoomMultiplier = 1.0; // Always fit-width (zoom UI removed)
   const [containerWidth, setContainerWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
-      return isSplitView ? Math.max(window.innerWidth - 420, 360) : window.innerWidth;
+      return isSplitView ? Math.max(window.innerWidth - 420, 360) : Math.max(window.innerWidth - 12, 280);
     }
-    return 380;
+    return 360;
   });
   const [useCanvasMode, setUseCanvasMode] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -388,9 +387,10 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         {useCanvasMode && !loadError && (
           <div className="pdf-canvas-container">
             {pages.map((pageMeta) => {
-              // iOS-safe width: subtract padding (8px×2=16px) to never exceed viewport
-              const availableWidth = Math.max(containerWidth - 16, 280);
-              const targetWidth = availableWidth * zoomMultiplier;
+              // iOS-safe width: clamp strictly to containerWidth - 12 and window.innerWidth - 12
+              const screenMax = typeof window !== 'undefined' ? window.innerWidth - 12 : 360;
+              const availableWidth = Math.min(Math.max(containerWidth - 12, 280), screenMax);
+              const targetWidth = availableWidth;
 
               return (
                 <PdfPageCanvas 
