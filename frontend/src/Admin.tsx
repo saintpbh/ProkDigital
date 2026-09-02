@@ -15,6 +15,14 @@ type ViewMode = 'dashboard' | 'management';
 import AdminLogin from './AdminLogin';
 import { firebaseService } from './services/firebaseService';
 
+export function formatScheduleDayLabel(day: string): string {
+    if (!day) return '';
+    if (day.includes('1일차') && !day.includes('9/15')) return '1일차 (9/15 화)';
+    if (day.includes('2일차') && !day.includes('9/16')) return '2일차 (9/16 수)';
+    if (day.includes('3일차') && !day.includes('9/17')) return '3일차 (9/17 목)';
+    return day;
+}
+
 export default function Admin() {
     // Auth State
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1260,7 +1268,7 @@ export default function Admin() {
                             <tbody>
                                 {(scheduleModalDayFilter === 'ALL' ? schedules : schedules.filter(s => s.day === scheduleModalDayFilter)).map(s => (
                                     <tr key={s.id} className={s.is_current ? 'row-current-highlight' : ''}>
-                                        <td><span className="day-badge">{s.day}</span></td>
+                                        <td><span className="day-badge">{formatScheduleDayLabel(s.day)}</span></td>
                                         <td><span className="time-badge">{s.time || '-'}</span></td>
                                         <td>
                                             <strong>{s.title}</strong>

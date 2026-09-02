@@ -15,6 +15,23 @@ import { firebaseService } from './services/firebaseService';
 
 type TabType = 'agenda' | 'schedule' | 'announcements';
 
+export function formatScheduleDayLabel(day: string): string {
+  if (!day) return '';
+  if (day.includes('1일차') && !day.includes('9/15')) return '1일차 (9/15 화)';
+  if (day.includes('2일차') && !day.includes('9/16')) return '2일차 (9/16 수)';
+  if (day.includes('3일차') && !day.includes('9/17')) return '3일차 (9/17 목)';
+  return day;
+}
+
+function getConferenceDayForDate(date: Date): string | null {
+  const month = date.getMonth() + 1; // 1-12
+  const day = date.getDate();
+  if (month === 9 && day === 15) return '1일차';
+  if (month === 9 && day === 16) return '2일차';
+  if (month === 9 && day === 17) return '3일차';
+  return null;
+}
+
 function parseTimeRangeToMinutes(timeStr: string): { startMin: number; endMin: number } | null {
   if (!timeStr) return null;
   const parts = timeStr.split(/[~–-]/);
@@ -37,16 +54,29 @@ function parseTimeRangeToMinutes(timeStr: string): { startMin: number; endMin: n
 function findActiveSchedule(schedules: any[]): { activeItem: any | null; isExplicit: boolean } {
   if (!schedules || schedules.length === 0) return { activeItem: null, isExplicit: false };
 
-  // 1. Explicit admin live mark (NOW)
+  // 1. Explicit admin live mark (NOW) - Takes top priority at any time
   const explicit = schedules.find((s: any) => s.is_current);
   if (explicit) return { activeItem: explicit, isExplicit: true };
 
-  // 2. Real-time time match with current hour:minute
+  // 2. Real-time date & time match
   const now = new Date();
+  const todayConferenceDay = getConferenceDayForDate(now);
+
+  // If today is NOT during the conference (e.g. 9월 2일), do not auto-match by clock
+  if (!todayConferenceDay) {
+    return { activeItem: null, isExplicit: false };
+  }
+
+  // Filter schedules for today's day (e.g. 1일차 on 9/15)
+  const todaySchedules = schedules.filter((s: any) => (s.day || '').includes(todayConferenceDay));
+  if (todaySchedules.length === 0) {
+    return { activeItem: null, isExplicit: false };
+  }
+
   const currentMin = now.getHours() * 60 + now.getMinutes();
 
-  // Find exact time range match
-  const exactMatch = schedules.find((s: any) => {
+  // Find exact time range match today
+  const exactMatch = todaySchedules.find((s: any) => {
     const range = parseTimeRangeToMinutes(s.time);
     return range && currentMin >= range.startMin && currentMin <= range.endMin;
   });
@@ -55,7 +85,7 @@ function findActiveSchedule(schedules: any[]): { activeItem: any | null; isExpli
   // Find closest past schedule today
   let closestItem = null;
   let minDiff = Infinity;
-  for (const s of schedules) {
+  for (const s of todaySchedules) {
     const range = parseTimeRangeToMinutes(s.time);
     if (range) {
       const diff = currentMin - range.startMin;
@@ -67,7 +97,7 @@ function findActiveSchedule(schedules: any[]): { activeItem: any | null; isExpli
   }
   if (closestItem) return { activeItem: closestItem, isExplicit: false };
 
-  return { activeItem: schedules[0] || null, isExplicit: false };
+  return { activeItem: null, isExplicit: false };
 }
 
 function App() {
@@ -632,7 +662,7 @@ function App() {
                     className={`day-tab-btn ${selectedDayTab === day ? 'active' : ''}`}
                     onClick={() => { haptic.tab(); setSelectedDayTab(day); }}
                   >
-                    {day}
+                    {formatScheduleDayLabel(day)}
                   </button>
                 ))}
               </div>
@@ -660,7 +690,7 @@ function App() {
                       </div>
                     ) : null}
                     <div className="schedule-card-header">
-                      <span className="schedule-day-tag">{item.day}</span>
+                      <span className="schedule-day-tag">{formatScheduleDayLabel(item.day)}</span>
                       <span className="schedule-time">🕒 {item.time || '시간 미정'}</span>
                       {item.location && <span className="schedule-loc">📍 {item.location}</span>}
                     </div>
