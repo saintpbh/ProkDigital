@@ -1467,7 +1467,11 @@ a.link-card {
    PAD / TABLET / PC SPLIT-VIEW WORKSPACE
    ========================================== */
 
-/* Mobile Default (< 900px) */
+/* ==========================================
+   PAD / TABLET / PC SPLIT-VIEW WORKSPACE
+   ========================================== */
+
+/* Mobile Default (< 768px) */
 .app-split-workspace {
   display: block;
   width: 100%;
@@ -1505,11 +1509,12 @@ a.link-card {
   border-width: 2px;
 }
 
-/* 💻 Pad / Tablet / PC Split-View (>= 900px) */
-@media (min-width: 900px) {
+/* 💻 Pad / Tablet / PC Split-View (>= 768px) */
+@media (min-width: 768px) {
   .app-split-workspace {
-    display: flex;
-    flex-direction: row;
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100vw;
     height: 100vh;
     max-height: 100vh;
     overflow: hidden;
@@ -1518,16 +1523,17 @@ a.link-card {
 
   /* ⬅️ Left Master Sidebar (List Column) */
   .workspace-master-pane {
-    width: 400px;
-    min-width: 360px;
-    max-width: 440px;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+    width: 380px !important;
+    min-width: 340px !important;
+    max-width: 420px !important;
+    height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
     background: #f8fafc;
     border-right: 1px solid #e2e8f0;
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.04);
     z-index: 10;
+    flex-shrink: 0;
   }
 
   .workspace-master-pane .header {
@@ -1539,15 +1545,16 @@ a.link-card {
     border-bottom: 1px solid #e2e8f0;
   }
 
-  /* Desktop Top Tab Navigation Bar */
+  /* Desktop Top Tab Navigation Bar (Visible on iPad & PC) */
   .desktop-tab-nav {
-    display: flex;
+    display: flex !important;
     align-items: center;
     background: #e2e8f0;
     padding: 5px;
     margin: var(--space-3) var(--space-4) var(--space-2);
     border-radius: var(--radius-xl);
     gap: 4px;
+    flex-shrink: 0;
   }
 
   .desktop-tab-btn {
@@ -1592,6 +1599,9 @@ a.link-card {
     flex: 1;
     overflow-y: auto;
     padding: var(--space-2) var(--space-4) var(--space-8);
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box;
     scrollbar-width: thin;
   }
 
@@ -1648,12 +1658,16 @@ a.link-card {
 
   /* ➡️ Right Detail Workspace (Document Viewer Pane) */
   .workspace-detail-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: #ffffff;
-    overflow: hidden;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    min-width: 0 !important;
+    width: auto !important;
+    background: #1e293b !important;
+    overflow: hidden !important;
+    position: relative !important;
+    pointer-events: auto !important;
   }
 
   .split-doc-viewer {
