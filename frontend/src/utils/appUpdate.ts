@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.5.1 (iOS 터치스크롤 & 줌 수정)';
+export const APP_VERSION = 'v2.5.2 (오전 9시 안정 롤백 & 세로 전용 스크롤)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

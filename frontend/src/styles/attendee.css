@@ -921,6 +921,8 @@
 
 /* ── Fast Ultra-Fast PDF Canvas Viewer ── */
 .fast-pdf-viewer {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   background: #1e293b;
@@ -940,7 +942,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
   background: #0f172a;
   color: #ffffff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -948,93 +950,22 @@
   z-index: 10;
   flex-shrink: 0;
 }
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-.pdf-type-badge {
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  letter-spacing: 0.5px;
-}
-.page-count-badge {
-  background: rgba(255, 255, 255, 0.15);
-  color: #cbd5e1;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-}
-.pdf-title-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: #f8fafc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-/* 📖 Interactive Page Navigation & Quick Jump in Toolbar */
-.toolbar-page-nav {
-  display: flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-lg);
-  padding: 2px;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.btn-page-step {
-  background: transparent;
-  border: none;
-  color: #ffffff;
-  min-width: 40px;
-  min-height: 36px;
-  padding: 5px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-  line-height: 1;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.btn-page-step:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
-}
-.btn-page-step:active:not(:disabled) {
-  background: rgba(255, 255, 255, 0.35);
-  transform: scale(0.9);
-}
-.btn-page-step:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
 .btn-page-indicator {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ffffff;
-  padding: 6px 10px;
+  padding: 6px 12px;
   min-height: 36px;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   transition: all 0.15s ease;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -1048,24 +979,16 @@
 }
 .btn-page-indicator .divider {
   color: rgba(255, 255, 255, 0.4);
-  font-size: 10px;
+  font-size: 11px;
 }
 .btn-page-indicator .total-p {
   color: #cbd5e1;
 }
 
-.toolbar-controls {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
 .btn-tool {
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   border: none;
-  /* iOS: minimum 44px touch target per Apple HIG */
   min-width: 44px;
   min-height: 36px;
   padding: 8px 12px;
@@ -1078,35 +1001,8 @@
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-}
-.btn-tool:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-}
-.btn-tool:active:not(:disabled) {
-  background: rgba(255, 255, 255, 0.35);
-  transform: scale(0.95);
-}
-.btn-tool:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.btn-fit-width {
-  background: rgba(37, 99, 235, 0.25);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.btn-fit-width.active {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #3b82f6;
-  font-weight: 800;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
 }
 .btn-tool-browser {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
@@ -1282,24 +1178,16 @@
 }
 
 .fast-pdf-body {
-  /* iOS Safari: absolute positioning is the ONLY reliable inner-scroll pattern */
-  position: absolute;
-  top: calc(53px + env(safe-area-inset-top, 0px));
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow-y: scroll;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
   background: #334155;
-  padding: 8px 4px 32px;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 6px 32px;
   box-sizing: border-box;
-  touch-action: pan-y;
-  /* Force GPU compositing layer for reliable iOS scroll */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  will-change: scroll-position;
 }
 .fast-pdf-skeleton-loader {
   position: absolute;
@@ -1332,25 +1220,22 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  touch-action: pan-y;
 }
 .pdf-page-card {
   background: #ffffff;
   border-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   position: relative;
   overflow: hidden;
   margin: 0 auto;
   box-sizing: border-box;
-  max-width: 100%;    /* Never exceed container width */
-  touch-action: pan-y;
+  max-width: 100%;
 }
 .pdf-page-canvas {
   display: block;
   width: 100% !important;
   height: auto !important;
-  touch-action: pan-y;
-  pointer-events: none;  /* Let parent handle all touch — canvas is display-only */
+  max-width: 100%;
 }
 .page-number-tag {
   position: absolute;

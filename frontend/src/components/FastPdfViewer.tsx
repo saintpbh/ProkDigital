@@ -108,55 +108,6 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     };
   }, []);
 
-  // iOS Safari: Lock body scroll when modal viewer is open
-  // The ONLY reliable iOS Safari body-scroll-lock pattern:
-  // Set body to position:fixed with saved scroll offset
-  useEffect(() => {
-    if (!isSplitView) {
-      const scrollY = window.scrollY;
-      const body = document.body;
-      const html = document.documentElement;
-      
-      // Save current scroll position and lock body
-      body.style.position = 'fixed';
-      body.style.top = `-${scrollY}px`;
-      body.style.left = '0';
-      body.style.right = '0';
-      body.style.overflow = 'hidden';
-      html.style.overflow = 'hidden';
-      
-      return () => {
-        body.style.position = '';
-        body.style.top = '';
-        body.style.left = '';
-        body.style.right = '';
-        body.style.overflow = '';
-        html.style.overflow = '';
-        window.scrollTo(0, scrollY);
-      };
-    }
-  }, [isSplitView]);
-
-  // iOS Safari: Prevent the viewer shell from intercepting touch events
-  // that should go to the scrollable body
-  useEffect(() => {
-    const viewer = containerRef.current?.parentElement;
-    if (!viewer) return;
-    
-    const preventOuterScroll = (e: TouchEvent) => {
-      // Only prevent if touch target is NOT inside the scroll container
-      const scrollContainer = containerRef.current;
-      if (scrollContainer && !scrollContainer.contains(e.target as Node)) {
-        e.preventDefault();
-      }
-    };
-    
-    viewer.addEventListener('touchmove', preventOuterScroll, { passive: false });
-    return () => {
-      viewer.removeEventListener('touchmove', preventOuterScroll);
-    };
-  }, [pages]); // Re-attach after pages render
-
   // 1. Resolve Blob URL immediately from memory cache
   useEffect(() => {
     let isCancelled = false;
