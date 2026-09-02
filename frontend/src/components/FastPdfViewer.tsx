@@ -108,6 +108,21 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     };
   }, []);
 
+  // iOS Safari: Lock body scroll when modal viewer is open
+  useEffect(() => {
+    if (!isSplitView) {
+      // Lock body & html scroll to prevent iOS scroll-through
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isSplitView]);
+
   // 1. Resolve Blob URL immediately from memory cache
   useEffect(() => {
     let isCancelled = false;

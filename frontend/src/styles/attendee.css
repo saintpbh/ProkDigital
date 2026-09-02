@@ -921,26 +921,20 @@
 
 /* ── Fast Ultra-Fast PDF Canvas Viewer ── */
 .fast-pdf-viewer {
-  display: flex;
-  flex-direction: column;
   width: 100%;
   height: 100%;
   background: #1e293b;
   position: relative;
-  /* CRITICAL: Do NOT use overflow:hidden here — it blocks iOS touch scroll */
-  overflow: visible;
+  overflow: hidden;
 }
 .fast-pdf-viewer.is-modal {
   position: fixed;
   inset: 0;
   z-index: var(--z-overlay);
   animation: fadeIn 0.15s ease-out;
-  /* iOS: fixed modal must clip at edges */
-  overflow: hidden;
 }
 .fast-pdf-viewer.is-split {
   height: 100%;
-  overflow: hidden;
 }
 .fast-pdf-toolbar {
   display: flex;
@@ -1288,18 +1282,20 @@
 }
 
 .fast-pdf-body {
-  flex: 1 1 0%;         /* iOS flex: explicit basis 0 to allow shrinking */
-  min-height: 0;        /* CRITICAL: iOS flex scroll fix — allows overflow inside flex child */
-  width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;   /* CRITICAL: iOS blocks vertical scroll if horizontal scroll exists */
+  /* iOS Safari: absolute positioning is the ONLY reliable inner-scroll pattern */
+  position: absolute;
+  top: calc(53px + env(safe-area-inset-top, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: scroll;   /* iOS: 'scroll' is more reliable than 'auto' */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   background: #334155;
-  position: relative;
-  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
-  overscroll-behavior-y: contain;    /* Prevent scroll chaining to parent */
-  padding: 12px 4px 32px;
+  padding: 8px 4px 32px;
   box-sizing: border-box;
-  touch-action: pan-y;  /* iOS: only vertical scroll, no horizontal gesture conflict */
+  touch-action: pan-y;
 }
 .fast-pdf-skeleton-loader {
   position: absolute;
