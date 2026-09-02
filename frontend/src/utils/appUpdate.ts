@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.6.2 (PDF.js 로컬 번들 워커 완전 동기화)';
+export const APP_VERSION = 'v2.6.3 (불필요한 Identity Auth iframe 완전 제거)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {
