@@ -62,7 +62,7 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   const [resumeToast, setResumeToast] = useState<string | null>(null);
   const [isJumpModalOpen, setIsJumpModalOpen] = useState<boolean>(false);
   const [jumpInputVal, setJumpInputVal] = useState<string>('');
-  const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.0); // 1.0 = 100% Auto-fit width
+  const zoomMultiplier = 1.0; // Always fit-width (zoom UI removed)
   const [containerWidth, setContainerWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       return isSplitView ? Math.max(window.innerWidth - 420, 360) : window.innerWidth;
@@ -259,21 +259,6 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     }
   };
 
-  // Zoom Handlers
-  const handleZoomIn = () => {
-    haptic.button();
-    setZoomMultiplier((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 3.0));
-  };
-
-  const handleZoomOut = () => {
-    haptic.button();
-    setZoomMultiplier((prev) => Math.max(Number((prev - 0.25).toFixed(2)), 0.5));
-  };
-
-  const handleFitWidth = () => {
-    haptic.button();
-    setZoomMultiplier(1.0); // 1.0 = Default 100% Fit Width
-  };
 
   const handleJumpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,96 +270,51 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
 
   return (
     <div className={`fast-pdf-viewer ${isSplitView ? 'is-split' : 'is-modal'}`}>
-      {/* Floating Fast Viewer Toolbar */}
+      {/* Minimal Mobile Toolbar: Page indicator + 원본 열기 + 닫기 */}
       <div className="fast-pdf-toolbar">
-        <div className="toolbar-left">
-          <span className="pdf-type-badge">PDF</span>
-          <span className="pdf-title-text" title={title}>{title}</span>
-        </div>
+        {/* 1. 현재 페이지 표시 (탭하면 페이지 점프 팝업) */}
+        <button 
+          className="btn-page-indicator" 
+          onClick={() => {
+            if (numPages > 0) {
+              haptic.modal();
+              setJumpInputVal(String(currentPage));
+              setIsJumpModalOpen(!isJumpModalOpen);
+            }
+          }}
+          title="페이지 이동"
+          disabled={numPages === 0}
+        >
+          <span className="current-p">{currentPage}</span>
+          <span className="divider">/</span>
+          <span className="total-p">{numPages > 0 ? `${numPages}p` : '...'}</span>
+        </button>
 
-        {/* 📖 Interactive Page Navigation & Quick Jump */}
-        <div className="toolbar-page-nav">
-          <button 
-            className="btn-page-step" 
-            onClick={() => scrollToPage(currentPage - 1)}
-            disabled={currentPage <= 1 || numPages === 0}
-            title="이전 페이지"
-          >
-            ◀
-          </button>
-          <button 
-            className="btn-page-indicator" 
-            onClick={() => {
-              if (numPages > 0) {
-                haptic.modal();
-                setJumpInputVal(String(currentPage));
-                setIsJumpModalOpen(!isJumpModalOpen);
-              }
-            }}
-            title="페이지 직접 이동"
-            disabled={numPages === 0}
-          >
-            <span className="current-p">{currentPage}</span>
-            <span className="divider">/</span>
-            <span className="total-p">{numPages > 0 ? `${numPages}p` : '...'}</span>
-          </button>
-          <button 
-            className="btn-page-step" 
-            onClick={() => scrollToPage(currentPage + 1)}
-            disabled={numPages === 0 || currentPage >= numPages}
-            title="다음 페이지"
-          >
-            ▶
-          </button>
-        </div>
+        {/* 2. 원본 열기 */}
+        <button 
+          className="btn-tool btn-tool-browser" 
+          onClick={() => {
+            haptic.button();
+            window.open(url, '_blank');
+          }}
+          title="브라우저(원본) 열기"
+        >
+          🌐 원본
+        </button>
 
-        <div className="toolbar-controls">
+        {/* 3. 닫기 */}
+        {onClose && (
           <button 
-            className="btn-tool" 
-            onClick={handleZoomOut} 
-            title="축소"
-            disabled={zoomMultiplier <= 0.5}
-          >
-            🔍-
-          </button>
-          <button 
-            className={`btn-tool btn-fit-width ${zoomMultiplier === 1.0 ? 'active' : ''}`} 
-            onClick={handleFitWidth} 
-            title="가로폭 맞춤 (기본 100%)"
-          >
-            ↔ {Math.round(zoomMultiplier * 100)}%
-          </button>
-          <button 
-            className="btn-tool" 
-            onClick={handleZoomIn} 
-            title="확대"
-            disabled={zoomMultiplier >= 3.0}
-          >
-            🔍+
-          </button>
-          <button 
-            className="btn-tool btn-tool-browser" 
+            className="btn-tool btn-tool-close" 
             onClick={() => {
-              haptic.button();
-              window.open(url, '_blank');
+              haptic.modal();
+              onClose();
             }}
-            title="브라우저(원본) 열기 / 다운로드"
+            title="닫기"
           >
-            🌐 원본 열기
+            ✕
           </button>
-          {onClose && (
-            <button 
-              className="btn-tool btn-tool-close" 
-              onClick={() => {
-                haptic.modal();
-                onClose();
-              }}
-              title="닫기"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Auto-Resume Floating Toast Notification */}
