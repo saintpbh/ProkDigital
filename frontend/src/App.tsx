@@ -3,7 +3,7 @@ import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { EventLogin } from './components/EventLogin';
 import { PWAInstallGuide } from './components/PWAInstallGuide';
 import { FastPdfViewer } from './components/FastPdfViewer';
-import { preloadAllPdfs } from './utils/pdfCache';
+import { preloadAllPdfs, preloadPdf } from './utils/pdfCache';
 import { haptic } from './utils/haptic';
 import { APP_VERSION, forceUpdateApp } from './utils/appUpdate';
 import './styles/global.css';
@@ -33,7 +33,6 @@ function App() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
-  const [prefetchUrl, setPrefetchUrl] = useState<string | null>(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -120,8 +119,7 @@ function App() {
       console.log('[Firebase] 📄 New document shared! Triggering prominent long haptic feedback.');
       // Distinct long haptic pattern to definitely catch attendee's attention
       haptic.newDocument();
-      setPrefetchUrl(url);
-      setTimeout(() => setPrefetchUrl(null), 10000);
+      preloadPdf(url);
     }
   });
 
@@ -779,11 +777,6 @@ function App() {
             title={displayFiles.find((f: any) => f.url === viewerUrl)?.title || "문서 열람"}
             onClose={() => setViewerUrl(null)}
           />
-        )}
-
-        {/* Hidden Pre-fetch Buffer */}
-        {prefetchUrl && (
-          <iframe src={prefetchUrl} className="prefetch-buffer" title="prefetch-buffer" />
         )}
       </main>
     </div>

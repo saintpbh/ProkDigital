@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.6.0 (iOS 캔버스 메모리 가상화 & 초고속 스크롤)';
+export const APP_VERSION = 'v2.6.1 (웹 내장 뷰어 즉시 열람 & 시스템 팝업 차단)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

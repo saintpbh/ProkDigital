@@ -46,7 +46,7 @@ function saveProgress(pdfUrl: string, page: number, scrollTop: number) {
 
 export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   url,
-  title = '문서 열람',
+  title: _title = '문서 열람',
   isSplitView = false,
   onClose
 }) => {
@@ -68,7 +68,6 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     }
     return 360;
   });
-  const [useCanvasMode, setUseCanvasMode] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<any>(null);
   const isAutoScrollingRef = useRef<boolean>(false);
@@ -193,9 +192,9 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         }
       })
       .catch((err) => {
-        console.warn('PDF.js parse failed, falling back to native embed', err);
+        console.error('PDF.js parse error:', err);
         if (!isCancelled) {
-          setUseCanvasMode(false);
+          setLoadError('문서를 표시하는 중 오류가 발생했습니다. 상단의 [🌐 원본] 버튼을 눌러 열람해주세요.');
           setIsLoading(false);
         }
       });
@@ -384,7 +383,7 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         )}
 
         {/* 1. Fast Canvas Mode with Auto-Fit Width */}
-        {useCanvasMode && !loadError && (
+        {!loadError && (
           <div className="pdf-canvas-container">
             {pages.map((pageMeta) => {
               // iOS-safe width: clamp strictly to containerWidth - 12 and window.innerWidth - 12
@@ -404,15 +403,6 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
               );
             })}
           </div>
-        )}
-
-        {/* 2. Native Embed Fallback Mode */}
-        {!useCanvasMode && !loadError && (
-          <iframe 
-            src={`${blobUrl}#toolbar=0&navpanes=0&view=FitH`}
-            title={title}
-            className="fast-native-pdf-frame"
-          />
         )}
       </div>
     </div>
