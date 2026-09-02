@@ -293,39 +293,40 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         </div>
 
         {/* 📖 Interactive Page Navigation & Quick Jump */}
-        {numPages > 0 && (
-          <div className="toolbar-page-nav">
-            <button 
-              className="btn-page-step" 
-              onClick={() => scrollToPage(currentPage - 1)}
-              disabled={currentPage <= 1}
-              title="이전 페이지"
-            >
-              ◀
-            </button>
-            <button 
-              className="btn-page-indicator" 
-              onClick={() => {
+        <div className="toolbar-page-nav">
+          <button 
+            className="btn-page-step" 
+            onClick={() => scrollToPage(currentPage - 1)}
+            disabled={currentPage <= 1 || numPages === 0}
+            title="이전 페이지"
+          >
+            ◀
+          </button>
+          <button 
+            className="btn-page-indicator" 
+            onClick={() => {
+              if (numPages > 0) {
                 haptic.modal();
                 setJumpInputVal(String(currentPage));
                 setIsJumpModalOpen(!isJumpModalOpen);
-              }}
-              title="페이지 직접 이동"
-            >
-              <span className="current-p">{currentPage}</span>
-              <span className="divider">/</span>
-              <span className="total-p">{numPages}p</span>
-            </button>
-            <button 
-              className="btn-page-step" 
-              onClick={() => scrollToPage(currentPage + 1)}
-              disabled={currentPage >= numPages}
-              title="다음 페이지"
-            >
-              ▶
-            </button>
-          </div>
-        )}
+              }
+            }}
+            title="페이지 직접 이동"
+            disabled={numPages === 0}
+          >
+            <span className="current-p">{currentPage}</span>
+            <span className="divider">/</span>
+            <span className="total-p">{numPages > 0 ? `${numPages}p` : '...'}</span>
+          </button>
+          <button 
+            className="btn-page-step" 
+            onClick={() => scrollToPage(currentPage + 1)}
+            disabled={numPages === 0 || currentPage >= numPages}
+            title="다음 페이지"
+          >
+            ▶
+          </button>
+        </div>
 
         <div className="toolbar-controls">
           <button 

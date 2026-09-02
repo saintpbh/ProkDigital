@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.4.0 (최신 빌드)';
+export const APP_VERSION = 'v2.5.0 (스마트 이어보기 & 퀵 점프)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {
@@ -27,10 +27,10 @@ export async function forceUpdateApp(): Promise<void> {
       await Promise.all(cacheKeys.map(key => caches.delete(key)));
     }
 
-    // 3. Clear sessionStorage and obsolete localStorage caches, preserving auth
+    // 3. Clear sessionStorage and obsolete localStorage caches, preserving auth & pdf progress
     try {
       sessionStorage.clear();
-      // Retain essential tokens: eventToken, voterId, pwa_start_path
+      // Retain essential tokens: eventToken, voterId, pwa_start_path, prok_pdf_pos_
       const savedToken = localStorage.getItem('eventToken');
       const savedVoterId = localStorage.getItem('voterId');
       const savedPwaPath = localStorage.getItem('pwa_start_path');
@@ -39,7 +39,7 @@ export async function forceUpdateApp(): Promise<void> {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && !['eventToken', 'voterId', 'pwa_start_path'].includes(k)) {
+        if (k && !['eventToken', 'voterId', 'pwa_start_path'].includes(k) && !k.startsWith('prok_pdf_pos_')) {
           keysToRemove.push(k);
         }
       }
