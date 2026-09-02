@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.7.5 (파일 100개+ 대용량 공유 최적화, 최신순 정렬 & 관리자 20개 페이지네이션)';
+export const APP_VERSION = 'v2.7.6 (교단 공식 명칭 완벽 통일: 대의원 ➔ 총대)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

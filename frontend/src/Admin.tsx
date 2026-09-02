@@ -244,7 +244,7 @@ export default function Admin() {
         if (!activeEvent || !announcement.trim()) return;
         try {
             await firebaseService.sendAnnouncement(activeEvent.id, announcement);
-            showAlert('공지 발송 완료', '대의원 화면에 실시간 공지가 송출되었습니다.');
+            showAlert('공지 발송 완료', '총대 화면에 실시간 공지가 송출되었습니다.');
             setAnnouncement('');
         } catch (err) {
             console.error('Failed to send announcement:', err);
@@ -254,10 +254,10 @@ export default function Admin() {
 
     const handleClearCurrentAnnouncement = async () => {
         if (!activeEvent?.id) return;
-        if (!(await showConfirm('공지 송출 중단', '현재 대의원 화면에 떠 있는 실시간 공지를 즉시 중단/삭제하시겠습니까?'))) return;
+        if (!(await showConfirm('공지 송출 중단', '현재 총대 화면에 떠 있는 실시간 공지를 즉시 중단/삭제하시겠습니까?'))) return;
         try {
             await firebaseService.clearCurrentAnnouncement(activeEvent.id);
-            showAlert('송출 중단 완료', '실시간 공지 배너가 모든 대의원 화면에서 즉시 제거되었습니다.');
+            showAlert('송출 중단 완료', '실시간 공지 배너가 모든 총대 화면에서 즉시 제거되었습니다.');
         } catch (err) {
             console.error('Failed to clear current announcement:', err);
             showAlert('공지 삭제에 실패했습니다.');
@@ -301,7 +301,7 @@ export default function Admin() {
             );
             await Promise.all(warmups);
             if (!silent) {
-                showAlert('🔥 CDN 웜업 완료!', '에지 서버 캐싱이 완료되어 모든 대의원이 지연 없이 즉시 열람할 수 있습니다.');
+                showAlert('🔥 CDN 웜업 완료!', '에지 서버 캐싱이 완료되어 모든 총대가 지연 없이 즉시 열람할 수 있습니다.');
             }
         } catch (error) {
             console.error('Warmup failed:', error);
@@ -432,7 +432,7 @@ export default function Admin() {
             await updateDoc(doc(db, 'schedules', id), { is_current: !currentStatus });
             showAlert(
                 !currentStatus ? '현재 진행 일정 설정' : '현재 진행 일정 해제',
-                !currentStatus ? '해당 일정이 대의원 화면에 [진행 중(NOW)]으로 강조 표시됩니다.' : '진행 중 표시가 해제되었습니다.'
+                !currentStatus ? '해당 일정이 총대 화면에 [진행 중(NOW)]으로 강조 표시됩니다.' : '진행 중 표시가 해제되었습니다.'
             );
         } catch (err) {
             console.error('Failed to toggle current schedule:', err);
@@ -499,9 +499,9 @@ export default function Admin() {
                 published_at: serverTimestamp() 
             });
             if (nextPublic) {
-                showAlert('문서 공유 시작', '문서가 모든 대의원의 모바일 화면에 실시간으로 공유되었습니다.');
+                showAlert('문서 공유 시작', '문서가 모든 총대의 모바일 화면에 실시간으로 공유되었습니다.');
             } else {
-                showAlert('문서 공유 중지', '문서 공유가 중지되었습니다. 대의원 화면에서 숨겨집니다.');
+                showAlert('문서 공유 중지', '문서 공유가 중지되었습니다. 총대 화면에서 숨겨집니다.');
             }
         } catch (err) {
             console.error('Failed to toggle file sharing:', err);
@@ -549,7 +549,7 @@ export default function Admin() {
             is_public: false,
             published_at: serverTimestamp(),
         });
-        showAlert('링크 추가 완료', '새 링크가 [공유 대기] 상태로 추가되었습니다. [공유하기] 버튼을 누르면 대의원 화면에 즉시 노출됩니다.');
+        showAlert('링크 추가 완료', '새 링크가 [공유 대기] 상태로 추가되었습니다. [공유하기] 버튼을 누르면 총대 화면에 즉시 노출됩니다.');
     };
 
     const toggleLink = async (id: string, currentPublic: boolean) => {
@@ -560,7 +560,7 @@ export default function Admin() {
                 published_at: serverTimestamp() 
             });
             if (nextPublic) {
-                showAlert('링크 공유 시작', '링크가 모든 대의원 화면에 실시간으로 노출됩니다.');
+                showAlert('링크 공유 시작', '링크가 모든 총대 화면에 실시간으로 노출됩니다.');
             } else {
                 showAlert('링크 공유 중지', '링크 공유가 중지되었습니다.');
             }
@@ -716,7 +716,7 @@ export default function Admin() {
                                             if (n && n !== ev.name) handleUpdateEvent(ev.id, { name: n });
                                         }}>✏️</button>
                                         <button title="비밀번호 변경" onClick={async () => {
-                                            const p = await showPrompt('접속 비밀번호 변경', ev.passcode || '', '새 접속 비밀번호를 입력해 주세요. 변경 즉시 접속 중인 모든 대의원이 실시간으로 원격 로그아웃됩니다.');
+                                            const p = await showPrompt('접속 비밀번호 변경', ev.passcode || '', '새 접속 비밀번호를 입력해 주세요. 변경 즉시 접속 중인 모든 총대가 실시간으로 원격 로그아웃됩니다.');
                                             if (p !== null && p.trim()) {
                                                 const trimmed = p.trim();
                                                 const newVersion = Date.now();
@@ -725,7 +725,7 @@ export default function Admin() {
                                                     session_version: newVersion,
                                                     passcode_updated_at: newVersion 
                                                 });
-                                                showAlert('비밀번호 변경 완료', `[${ev.name}] 행사의 접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 대의원이 실시간으로 원격 로그아웃되었습니다.`);
+                                                showAlert('비밀번호 변경 완료', `[${ev.name}] 행사의 접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 총대가 실시간으로 원격 로그아웃되었습니다.`);
                                             }
                                         }}>🔑</button>
                                         <button title="삭제" className="btn-card-del" onClick={() => handleDeleteEvent(ev.id)}>🗑️</button>
@@ -867,7 +867,7 @@ export default function Admin() {
                             <h3>📢 실시간 공지 발송</h3>
                         </div>
                         <textarea
-                            placeholder="대의원 화면에 즉시 표시될 내용을 입력하세요..."
+                            placeholder="총대 화면에 즉시 표시될 내용을 입력하세요..."
                             value={announcement}
                             onChange={(e) => setAnnouncement(e.target.value)}
                         />
@@ -947,11 +947,11 @@ export default function Admin() {
                                 alt="QR Code" 
                                 className="qr-code-img"
                             />
-                            <p className="qr-caption">대의원 접속용 QR 코드</p>
+                            <p className="qr-caption">총대 접속용 QR 코드</p>
                         </div>
 
                         <div className="test-url">
-                            <label>대의원 접속 URL (고정 도메인)</label>
+                            <label>총대 접속 URL (고정 도메인)</label>
                             <input readOnly value={joinUrl} />
                             <div className="btn-group">
                                 <button onClick={() => {
@@ -977,7 +977,7 @@ export default function Admin() {
                                     const p = await showPrompt(
                                         '접속 비밀번호 변경', 
                                         activeEvent.passcode || '', 
-                                        '새 접속 비밀번호를 입력해 주세요. [확인]을 누르면 접속 중인 모든 대의원이 화면 새로고침 없이 즉시 원격 로그아웃됩니다.'
+                                        '새 접속 비밀번호를 입력해 주세요. [확인]을 누르면 접속 중인 모든 총대가 화면 새로고침 없이 즉시 원격 로그아웃됩니다.'
                                     );
                                     if (p !== null && p.trim()) {
                                         const trimmed = p.trim();
@@ -987,20 +987,20 @@ export default function Admin() {
                                             session_version: newVersion,
                                             passcode_updated_at: newVersion 
                                         });
-                                        showAlert('비밀번호 변경 완료', `접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 대의원 화면이 실시간으로 원격 로그아웃되었습니다.`);
+                                        showAlert('비밀번호 변경 완료', `접속 비밀번호가 [${trimmed}](으)로 변경되었습니다.\n접속 중인 모든 총대 화면이 실시간으로 원격 로그아웃되었습니다.`);
                                     }
                                 }}>비밀번호 변경</button>
                                 <button className="btn-force-logout" onClick={async () => {
                                     if (!activeEvent?.id) return;
-                                    if (await showConfirm('전체 원격 로그아웃', '접속 중인 모든 대의원을 화면 새로고침 없이 즉시 원격 로그아웃시키겠습니까?')) {
+                                    if (await showConfirm('전체 원격 로그아웃', '접속 중인 모든 총대를 화면 새로고침 없이 즉시 원격 로그아웃시키겠습니까?')) {
                                         const newVersion = Date.now();
                                         await handleUpdateEvent(activeEvent.id, { 
                                             session_version: newVersion,
                                             passcode_updated_at: newVersion 
                                         });
-                                        showAlert('원격 로그아웃 완료', '모든 대의원 화면이 즉시 원격 로그아웃되었습니다. 다시 접속하려면 비밀번호를 다시 입력해야 합니다.');
+                                        showAlert('원격 로그아웃 완료', '모든 총대 화면이 즉시 원격 로그아웃되었습니다. 다시 접속하려면 비밀번호를 다시 입력해야 합니다.');
                                     }
-                                }} title="모든 대의원 화면 즉시 원격 로그아웃">⚡ 전체 원격 로그아웃</button>
+                                }} title="모든 총대 화면 즉시 원격 로그아웃">⚡ 전체 원격 로그아웃</button>
                             </div>
                         </div>
                     </section>
@@ -1207,7 +1207,7 @@ export default function Admin() {
                                                                         <button 
                                                                             onClick={() => toggleFile(f.id, true)}
                                                                             className="btn-share-stop"
-                                                                            title="모바일 공유 중지 (대의원 화면에서 숨김)"
+                                                                            title="모바일 공유 중지 (총대 화면에서 숨김)"
                                                                         >
                                                                             공유 중지
                                                                         </button>
@@ -1215,7 +1215,7 @@ export default function Admin() {
                                                                         <button 
                                                                             onClick={() => toggleFile(f.id, false)}
                                                                             className="btn-share-start"
-                                                                            title="모바일 즉시 공유 (대의원 화면에 노출)"
+                                                                            title="모바일 즉시 공유 (총대 화면에 노출)"
                                                                         >
                                                                             공유하기
                                                                         </button>
@@ -1252,7 +1252,7 @@ export default function Admin() {
                                                                     <button 
                                                                         onClick={() => toggleLink(l.id, true)}
                                                                         className="btn-share-stop"
-                                                                        title="공유 중지 (대의원 화면에서 숨김)"
+                                                                        title="공유 중지 (총대 화면에서 숨김)"
                                                                     >
                                                                         공유 중지
                                                                     </button>
@@ -1260,7 +1260,7 @@ export default function Admin() {
                                                                     <button 
                                                                         onClick={() => toggleLink(l.id, false)}
                                                                         className="btn-share-start"
-                                                                        title="대의원 화면에 즉시 공유"
+                                                                        title="총대 화면에 즉시 공유"
                                                                     >
                                                                         공유하기
                                                                     </button>
@@ -1349,7 +1349,7 @@ export default function Admin() {
                         <div>
                             <h3>📅 총회 회무 일정 관리 (전체 목록)</h3>
                             <p className="modal-subtitle">
-                                각 일정의 <strong>[진행 중 (NOW)]</strong> 버튼을 누르면 대의원 모바일 화면에 실시간으로 강조 배지가 표시됩니다.
+                                각 일정의 <strong>[진행 중 (NOW)]</strong> 버튼을 누르면 총대 모바일 화면에 실시간으로 강조 배지가 표시됩니다.
                             </p>
                         </div>
                         <div className="modal-header-actions">
@@ -1381,7 +1381,7 @@ export default function Admin() {
                                     <th>시간</th>
                                     <th>일정명 및 비고</th>
                                     <th>장소</th>
-                                    <th>진행 상태 (대의원 실시간 연동)</th>
+                                    <th>진행 상태 (총대 실시간 연동)</th>
                                     <th>제어</th>
                                 </tr>
                             </thead>
@@ -1399,7 +1399,7 @@ export default function Admin() {
                                             <button 
                                                 className={`btn-status-toggle ${s.is_current ? 'is-now' : ''}`}
                                                 onClick={() => toggleCurrentSchedule(s.id, s.is_current)}
-                                                title="클릭 시 대의원 화면에 현재 진행 중(NOW)으로 강조 표시"
+                                                title="클릭 시 총대 화면에 현재 진행 중(NOW)으로 강조 표시"
                                             >
                                                 {s.is_current ? '🟢 진행 중 (NOW)' : '대기'}
                                             </button>
