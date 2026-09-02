@@ -15,11 +15,10 @@ interface FastPdfViewerProps {
   onClose?: () => void;
 }
 
-interface RenderedPage {
+interface PageMeta {
   pageNumber: number;
-  dataUrl?: string;
-  width: number;
-  height: number;
+  originalWidth: number;
+  originalHeight: number;
 }
 
 export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
@@ -32,11 +31,50 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
-  const [pages, setPages] = useState<RenderedPage[]>([]);
-  const [scale, setScale] = useState<number>(1.0);
+  const [pages, setPages] = useState<PageMeta[]>([]);
+  const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.0); // 1.0 = 100% Auto-fit width
+  const [containerWidth, setContainerWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return isSplitView ? Math.max(window.innerWidth - 420, 360) : window.innerWidth;
+    }
+    return 380;
+  });
   const [useCanvasMode, setUseCanvasMode] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<any>(null);
+
+  // Measure container width dynamically on resize & orientation change
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const clientW = containerRef.current.clientWidth;
+        if (clientW > 100) {
+          setContainerWidth(clientW);
+        }
+      }
+    };
+
+    updateWidth();
+    const timer = setTimeout(updateWidth, 100);
+
+    const observer = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    window.addEventListener('resize', updateWidth);
+    window.addEventListener('orientationchange', updateWidth);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+      window.removeEventListener('orientationchange', updateWidth);
+    };
+  }, []);
 
   // 1. Resolve Blob URL immediately from memory cache
   useEffect(() => {
@@ -65,7 +103,7 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     };
   }, [url]);
 
-  // 2. Load PDF document via PDF.js for Ultra-Fast Canvas Rendering
+  // 2. Load PDF document via PDF.js
   useEffect(() => {
     let isCancelled = false;
     if (!blobUrl) return;
@@ -85,19 +123,18 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         pdfDocRef.current = pdfDoc;
         setNumPages(pdfDoc.numPages);
 
-        // Prepare page placeholders for virtual / progressive render
-        const initialPages: RenderedPage[] = [];
+        const pageMetas: PageMeta[] = [];
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           const page = await pdfDoc.getPage(i);
           const viewport = page.getViewport({ scale: 1.0 });
-          initialPages.push({
+          pageMetas.push({
             pageNumber: i,
-            width: viewport.width,
-            height: viewport.height
+            originalWidth: viewport.width,
+            originalHeight: viewport.height
           });
         }
         if (!isCancelled) {
-          setPages(initialPages);
+          setPages(pageMetas);
           setIsLoading(false);
         }
       })
@@ -117,17 +154,17 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   // Zoom Handlers
   const handleZoomIn = () => {
     haptic.button();
-    setScale((prev) => Math.min(prev + 0.25, 2.5));
+    setZoomMultiplier((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 3.0));
   };
 
   const handleZoomOut = () => {
     haptic.button();
-    setScale((prev) => Math.max(prev - 0.25, 0.6));
+    setZoomMultiplier((prev) => Math.max(Number((prev - 0.25).toFixed(2)), 0.5));
   };
 
-  const handleZoomReset = () => {
+  const handleFitWidth = () => {
     haptic.button();
-    setScale(1.0);
+    setZoomMultiplier(1.0); // 1.0 = Default 100% Fit Width
   };
 
   return (
@@ -136,18 +173,32 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
       <div className="fast-pdf-toolbar">
         <div className="toolbar-left">
           <span className="pdf-type-badge">PDF</span>
-          {numPages > 0 && <span className="page-count-badge">총 {numPages}페이지</span>}
+          {numPages > 0 && <span className="page-count-badge">총 {numPages}p</span>}
           <span className="pdf-title-text" title={title}>{title}</span>
         </div>
 
         <div className="toolbar-controls">
-          <button className="btn-tool" onClick={handleZoomOut} title="축소">
+          <button 
+            className="btn-tool" 
+            onClick={handleZoomOut} 
+            title="축소 (작게)"
+            disabled={zoomMultiplier <= 0.5}
+          >
             🔍-
           </button>
-          <button className="btn-tool zoom-label" onClick={handleZoomReset} title="기본 배율">
-            {Math.round(scale * 100)}%
+          <button 
+            className={`btn-tool btn-fit-width ${zoomMultiplier === 1.0 ? 'active' : ''}`} 
+            onClick={handleFitWidth} 
+            title="가로폭 맞춤 (기본 100%)"
+          >
+            ↔ {Math.round(zoomMultiplier * 100)}% {zoomMultiplier === 1.0 ? '(폭맞춤)' : ''}
           </button>
-          <button className="btn-tool" onClick={handleZoomIn} title="확대">
+          <button 
+            className="btn-tool" 
+            onClick={handleZoomIn} 
+            title="확대 (크게)"
+            disabled={zoomMultiplier >= 3.0}
+          >
             🔍+
           </button>
           <button 
@@ -193,21 +244,29 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
           </div>
         )}
 
-        {/* 1. Fast Canvas Mode (PDF.js Canvas Renderer with Zero Latency) */}
+        {/* 1. Fast Canvas Mode with Auto-Fit Width & Zoom */}
         {useCanvasMode && !loadError && (
-          <div className="pdf-canvas-container" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
-            {pages.map((pageInfo) => (
-              <PdfPageCanvas 
-                key={pageInfo.pageNumber} 
-                pdfDoc={pdfDocRef.current} 
-                pageNumber={pageInfo.pageNumber}
-                scale={1.5}
-              />
-            ))}
+          <div className="pdf-canvas-container">
+            {pages.map((pageMeta) => {
+              // Calculate width that fits the container (with 24px padding margin)
+              const availableWidth = Math.max(containerWidth - 28, 280);
+              const targetWidth = availableWidth * zoomMultiplier;
+
+              return (
+                <PdfPageCanvas 
+                  key={`${pageMeta.pageNumber}_${targetWidth}`} 
+                  pdfDoc={pdfDocRef.current} 
+                  pageNumber={pageMeta.pageNumber}
+                  targetWidth={targetWidth}
+                  originalWidth={pageMeta.originalWidth}
+                  originalHeight={pageMeta.originalHeight}
+                />
+              );
+            })}
           </div>
         )}
 
-        {/* 2. Native Embed Fallback Mode (WebKit / Safari / Chrome Native Viewer) */}
+        {/* 2. Native Embed Fallback Mode */}
         {!useCanvasMode && !loadError && (
           <iframe 
             src={`${blobUrl}#toolbar=0&navpanes=0&view=FitH`}
@@ -221,15 +280,21 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
 };
 
 /**
- * Individual Page Canvas Component with High-DPI Crisp Rendering
+ * High-DPI Page Canvas Component with Auto-Fit Width
  */
 const PdfPageCanvas: React.FC<{
   pdfDoc: any;
   pageNumber: number;
-  scale?: number;
-}> = ({ pdfDoc, pageNumber, scale = 1.5 }) => {
+  targetWidth: number;
+  originalWidth: number;
+  originalHeight: number;
+}> = ({ pdfDoc, pageNumber, targetWidth, originalWidth, originalHeight }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isRendered, setIsRendered] = useState(false);
+
+  // Aspect ratio preserved height
+  const scaleRatio = targetWidth / originalWidth;
+  const targetHeight = originalHeight * scaleRatio;
 
   useEffect(() => {
     let isCancelled = false;
@@ -237,19 +302,21 @@ const PdfPageCanvas: React.FC<{
 
     pdfDoc.getPage(pageNumber).then((page: any) => {
       if (isCancelled) return;
-      const viewport = page.getViewport({ scale });
+      
+      const renderScale = scaleRatio;
+      const viewport = page.getViewport({ scale: renderScale });
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const context = canvas.getContext('2d');
       if (!context) return;
 
-      // High DPI display sharpness
-      const outputScale = window.devicePixelRatio || 1;
+      // High DPI display sharpness (Retina / 2x / 3x)
+      const outputScale = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x for speed & memory
       canvas.width = Math.floor(viewport.width * outputScale);
       canvas.height = Math.floor(viewport.height * outputScale);
-      canvas.style.width = Math.floor(viewport.width) + 'px';
-      canvas.style.height = Math.floor(viewport.height) + 'px';
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
 
       const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
 
@@ -262,17 +329,20 @@ const PdfPageCanvas: React.FC<{
       page.render(renderContext).promise.then(() => {
         if (!isCancelled) setIsRendered(true);
       }).catch(() => {
-        // Ignore rendering cancellation errors
+        // Ignore rendering cancellation
       });
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [pdfDoc, pageNumber, scale]);
+  }, [pdfDoc, pageNumber, scaleRatio]);
 
   return (
-    <div className={`pdf-page-card ${isRendered ? 'is-ready' : 'is-loading'}`}>
+    <div 
+      className={`pdf-page-card ${isRendered ? 'is-ready' : 'is-loading'}`}
+      style={{ width: `${Math.floor(targetWidth)}px`, minHeight: `${Math.floor(targetHeight)}px` }}
+    >
       <canvas ref={canvasRef} className="pdf-page-canvas" />
       <span className="page-number-tag">{pageNumber}</span>
     </div>

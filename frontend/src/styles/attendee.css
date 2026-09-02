@@ -985,11 +985,11 @@
 .toolbar-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex-shrink: 0;
 }
 .btn-tool {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   border: none;
   padding: 6px 10px;
@@ -1002,13 +1002,27 @@
   align-items: center;
   justify-content: center;
 }
-.btn-tool:hover {
-  background: rgba(255, 255, 255, 0.22);
+.btn-tool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
 }
-.btn-tool.zoom-label {
-  min-width: 48px;
-  background: rgba(0, 0, 0, 0.3);
+.btn-tool:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.btn-fit-width {
+  background: rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
   font-size: 11px;
+  white-space: nowrap;
+}
+.btn-fit-width.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #3b82f6;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
 }
 .btn-tool-browser {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
@@ -1070,7 +1084,8 @@
   align-items: center;
   gap: 16px;
   width: 100%;
-  transition: transform 0.15s ease-out;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 .pdf-page-card {
   background: #ffffff;
@@ -1078,13 +1093,14 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   position: relative;
   overflow: hidden;
-  max-width: 100%;
-  transition: opacity 0.2s ease;
+  margin: 0 auto;
+  box-sizing: border-box;
+  transition: width 0.15s ease-out;
 }
 .pdf-page-canvas {
   display: block;
-  max-width: 100%;
-  height: auto;
+  width: 100% !important;
+  height: auto !important;
 }
 .page-number-tag {
   position: absolute;
