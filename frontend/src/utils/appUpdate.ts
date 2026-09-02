@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.6.3 (불필요한 Identity Auth iframe 완전 제거)';
+export const APP_VERSION = 'v2.7.0 (일정 실시간 포커스 및 공지 삭제/초기화 기능 지원)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

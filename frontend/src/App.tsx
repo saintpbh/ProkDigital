@@ -14,6 +14,61 @@ import { firebaseService } from './services/firebaseService';
 
 type TabType = 'agenda' | 'schedule' | 'announcements';
 
+function parseTimeRangeToMinutes(timeStr: string): { startMin: number; endMin: number } | null {
+  if (!timeStr) return null;
+  const parts = timeStr.split(/[~–-]/);
+  const parseSingle = (t: string): number | null => {
+    const match = t.match(/(\d{1,2})[:：](\d{2})/);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (t.includes('오후') && h < 12) h += 12;
+    if (t.includes('오전') && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const startMin = parseSingle(parts[0]);
+  if (startMin === null) return null;
+  const endMin = parts.length > 1 ? (parseSingle(parts[1]) ?? startMin + 60) : startMin + 60;
+  return { startMin, endMin };
+}
+
+function findActiveSchedule(schedules: any[]): { activeItem: any | null; isExplicit: boolean } {
+  if (!schedules || schedules.length === 0) return { activeItem: null, isExplicit: false };
+
+  // 1. Explicit admin live mark (NOW)
+  const explicit = schedules.find((s: any) => s.is_current);
+  if (explicit) return { activeItem: explicit, isExplicit: true };
+
+  // 2. Real-time time match with current hour:minute
+  const now = new Date();
+  const currentMin = now.getHours() * 60 + now.getMinutes();
+
+  // Find exact time range match
+  const exactMatch = schedules.find((s: any) => {
+    const range = parseTimeRangeToMinutes(s.time);
+    return range && currentMin >= range.startMin && currentMin <= range.endMin;
+  });
+  if (exactMatch) return { activeItem: exactMatch, isExplicit: false };
+
+  // Find closest past schedule today
+  let closestItem = null;
+  let minDiff = Infinity;
+  for (const s of schedules) {
+    const range = parseTimeRangeToMinutes(s.time);
+    if (range) {
+      const diff = currentMin - range.startMin;
+      if (diff >= 0 && diff < minDiff) {
+        minDiff = diff;
+        closestItem = s;
+      }
+    }
+  }
+  if (closestItem) return { activeItem: closestItem, isExplicit: false };
+
+  return { activeItem: schedules[0] || null, isExplicit: false };
+}
+
 function App() {
   const [event, setEvent] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -65,19 +120,15 @@ function App() {
       if (cleanMsg) {
         // Haptic feedback on incoming announcement
         haptic.notification();
-        const newAnnouncement = {
-          id: Date.now().toString(),
-          message: cleanMsg,
-          timestamp: new Date().toISOString()
-        };
-        setAnnouncementHistory(prev => {
-          const updated = [newAnnouncement, ...prev.filter(p => p.message !== cleanMsg)];
-          const currentToken = window.location.pathname.startsWith('/join/') 
-            ? window.location.pathname.split('/join/')[1] 
-            : localStorage.getItem('eventToken');
-          if (currentToken) localStorage.setItem(`announcements_${currentToken}`, JSON.stringify(updated));
-          return updated;
-        });
+      }
+    },
+    onAnnouncementsListUpdate: (serverList: any[]) => {
+      if (serverList) {
+        setAnnouncementHistory(serverList);
+        const currentToken = window.location.pathname.startsWith('/join/') 
+          ? window.location.pathname.split('/join/')[1] 
+          : localStorage.getItem('eventToken');
+        if (currentToken) localStorage.setItem(`announcements_${currentToken}`, JSON.stringify(serverList));
       }
     },
     onEventUpdate: (updatedEvent: any) => {
@@ -295,6 +346,44 @@ function App() {
     }
   };
 
+  // Find currently active or time-matched schedule
+  const activeScheduleInfo = findActiveSchedule(displaySchedules);
+
+  // Auto-focus & scroll to current schedule when schedule tab is activated
+  useEffect(() => {
+    if (activeTab === 'schedule' && activeScheduleInfo.activeItem) {
+      if (activeScheduleInfo.activeItem.day && selectedDayTab === 'ALL') {
+        setSelectedDayTab(activeScheduleInfo.activeItem.day);
+      }
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`schedule-card-${activeScheduleInfo.activeItem.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, activeScheduleInfo.activeItem?.id]);
+
+  // Attendee announcement deletion handlers
+  const handleDeleteAnnouncementItem = (id: string) => {
+    haptic.button();
+    setAnnouncementHistory(prev => {
+      const updated = prev.filter(a => a.id !== id);
+      const currentToken = token || localStorage.getItem('eventToken');
+      if (currentToken) localStorage.setItem(`announcements_${currentToken}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleClearAllAttendeeAnnouncements = () => {
+    haptic.button();
+    if (!window.confirm('수신된 모든 공지사항 기록을 삭제하시겠습니까?')) return;
+    setAnnouncementHistory([]);
+    const currentToken = token || localStorage.getItem('eventToken');
+    if (currentToken) localStorage.removeItem(`announcements_${currentToken}`);
+  };
+
   // Calculate unread announcements count
   const unreadCount = announcementHistory.filter(
     a => new Date(a.timestamp).getTime() > lastReadTimestamp
@@ -504,8 +593,27 @@ function App() {
         {activeTab === 'schedule' && (
           <section className="schedule-tab-content">
             <div className="schedule-header-row">
-              <h3>📅 총회 회무 일정</h3>
-              <p className="tab-desc">실시간 진행 일정을 확인하세요.</p>
+              <div>
+                <h3>📅 총회 회무 일정</h3>
+                <p className="tab-desc">실시간 진행 일정을 확인하세요.</p>
+              </div>
+              {activeScheduleInfo.activeItem && (
+                <button 
+                  className="btn-jump-current-schedule-header"
+                  onClick={() => {
+                    haptic.button();
+                    if (activeScheduleInfo.activeItem.day && selectedDayTab !== activeScheduleInfo.activeItem.day) {
+                      setSelectedDayTab(activeScheduleInfo.activeItem.day);
+                    }
+                    setTimeout(() => {
+                      document.getElementById(`schedule-card-${activeScheduleInfo.activeItem.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                  }}
+                  title="현재 진행 중인 일정으로 이동"
+                >
+                  📍 현재 일정
+                </button>
+              )}
             </div>
 
             {/* Day Selector Tabs */}
@@ -531,28 +639,37 @@ function App() {
 
             {/* Timeline List */}
             <div className="schedule-timeline">
-              {filteredSchedules.map((item: any) => (
-                <div 
-                  key={item.id} 
-                  className={`schedule-card ${item.is_current ? 'is-live-current' : ''}`}
-                >
-                  {item.is_current && (
-                    <div className="live-now-badge">
-                      <span className="dot pulse"></span>
-                      NOW 진행 중
+              {filteredSchedules.map((item: any) => {
+                const isItemActive = activeScheduleInfo.activeItem?.id === item.id;
+                return (
+                  <div 
+                    key={item.id} 
+                    id={`schedule-card-${item.id}`}
+                    className={`schedule-card ${item.is_current ? 'is-live-current' : (isItemActive ? 'is-time-focused' : '')}`}
+                  >
+                    {item.is_current ? (
+                      <div className="live-now-badge">
+                        <span className="dot pulse"></span>
+                        🔴 NOW 진행 중
+                      </div>
+                    ) : isItemActive ? (
+                      <div className="live-now-badge time-matched">
+                        <span className="dot pulse"></span>
+                        🕒 현재 시간 일정
+                      </div>
+                    ) : null}
+                    <div className="schedule-card-header">
+                      <span className="schedule-day-tag">{item.day}</span>
+                      <span className="schedule-time">🕒 {item.time || '시간 미정'}</span>
+                      {item.location && <span className="schedule-loc">📍 {item.location}</span>}
                     </div>
-                  )}
-                  <div className="schedule-card-header">
-                    <span className="schedule-day-tag">{item.day}</span>
-                    <span className="schedule-time">🕒 {item.time || '시간 미정'}</span>
-                    {item.location && <span className="schedule-loc">📍 {item.location}</span>}
+                    <div className="schedule-card-title">{item.title}</div>
+                    {item.description && (
+                      <div className="schedule-card-desc">{item.description}</div>
+                    )}
                   </div>
-                  <div className="schedule-card-title">{item.title}</div>
-                  {item.description && (
-                    <div className="schedule-card-desc">{item.description}</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
 
               {filteredSchedules.length === 0 && (
                 <div className="empty-state">
@@ -568,8 +685,19 @@ function App() {
         {activeTab === 'announcements' && (
           <section className="info-tab-content">
             <div className="announcement-header-row">
-              <h3>🔔 알림 및 공지사항</h3>
-              <p className="tab-desc">수신된 공지사항 기록입니다 (최신순).</p>
+              <div>
+                <h3>🔔 알림 및 공지사항</h3>
+                <p className="tab-desc">수신된 공지사항 기록입니다 (최신순).</p>
+              </div>
+              {announcementHistory.length > 0 && (
+                <button 
+                  className="btn-clear-all-announcements"
+                  onClick={handleClearAllAttendeeAnnouncements}
+                  title="모든 알림 기록 삭제"
+                >
+                  전체 삭제
+                </button>
+              )}
             </div>
             
             <div className="announcement-list">
@@ -585,9 +713,19 @@ function App() {
                   >
                     <div className="item-header">
                       <span className="item-time">
-                        {new Date(item.timestamp).toLocaleDateString([], { month: 'numeric', day: 'numeric' })}{' '}
-                        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {item.timestamp ? new Date(item.timestamp).toLocaleDateString([], { month: 'numeric', day: 'numeric' }) : ''}{' '}
+                        {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '방금 전'}
                       </span>
+                      <button 
+                        className="btn-delete-announcement-card"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAnnouncementItem(item.id);
+                        }}
+                        title="이 알림 삭제"
+                      >
+                        ✕
+                      </button>
                     </div>
                     <div className="item-body">
                       {item.message.length > 45 ? item.message.substring(0, 45) + '...' : item.message}
@@ -598,7 +736,7 @@ function App() {
               ) : (
                 <div className="empty-state">
                   <div className="empty-icon">📭</div>
-                  <p>아직 수신된 공지사항이 없습니다.</p>
+                  <p>수신된 공지사항이 없습니다.</p>
                 </div>
               )}
             </div>

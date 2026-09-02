@@ -35,6 +35,7 @@ export default function Admin() {
     const [_votes, _setVotes] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [announcement, setAnnouncement] = useState('');
+    const [announcementHistory, setAnnouncementHistory] = useState<any[]>([]);
     
     // File upload state
     const [isUploading, setIsUploading] = useState(false);
@@ -162,6 +163,15 @@ export default function Admin() {
         return () => unsub();
     }, [activeEvent?.id]);
 
+    // Listen to announcement history for active event (real-time)
+    useEffect(() => {
+        if (!activeEvent?.id) return;
+        const unsub = firebaseService.subscribeToAnnouncements(activeEvent.id, (items) => {
+            setAnnouncementHistory(items);
+        });
+        return () => unsub();
+    }, [activeEvent?.id]);
+
     // ==========================================
     // Event CRUD (Firestore)
     // ==========================================
@@ -220,17 +230,50 @@ export default function Admin() {
     // ==========================================
 
     const handleSendAnnouncement = async () => {
-        if (!activeEvent || !announcement) return;
+        if (!activeEvent || !announcement.trim()) return;
         try {
-            await updateDoc(doc(db, 'events', activeEvent.id), {
-                current_announcement: announcement.trim(),
-                current_announcement_ts: Date.now(),
-            });
-            showAlert('공지가 발송되었습니다.');
+            await firebaseService.sendAnnouncement(activeEvent.id, announcement);
+            showAlert('공지 발송 완료', '대의원 화면에 실시간 공지가 송출되었습니다.');
             setAnnouncement('');
         } catch (err) {
             console.error('Failed to send announcement:', err);
             showAlert('공지 발송에 실패했습니다.');
+        }
+    };
+
+    const handleClearCurrentAnnouncement = async () => {
+        if (!activeEvent?.id) return;
+        if (!(await showConfirm('공지 송출 중단', '현재 대의원 화면에 떠 있는 실시간 공지를 즉시 중단/삭제하시겠습니까?'))) return;
+        try {
+            await firebaseService.clearCurrentAnnouncement(activeEvent.id);
+            showAlert('송출 중단 완료', '실시간 공지 배너가 모든 대의원 화면에서 즉시 제거되었습니다.');
+        } catch (err) {
+            console.error('Failed to clear current announcement:', err);
+            showAlert('공지 삭제에 실패했습니다.');
+        }
+    };
+
+    const handleDeleteAnnouncement = async (announcementId: string, msg: string) => {
+        if (!activeEvent?.id) return;
+        if (!(await showConfirm('공지 기록 삭제', '이 공지 기록을 삭제하시겠습니까?'))) return;
+        try {
+            await firebaseService.deleteAnnouncement(activeEvent.id, announcementId, msg, activeEvent.current_announcement);
+            showAlert('삭제 완료', '공지 기록이 삭제되었습니다.');
+        } catch (err) {
+            console.error('Failed to delete announcement:', err);
+            showAlert('공지 삭제에 실패했습니다.');
+        }
+    };
+
+    const handleClearAllAnnouncements = async () => {
+        if (!activeEvent?.id) return;
+        if (!(await showConfirm('전체 공지 삭제', '발송된 모든 연습용/테스트 공지 기록을 완전히 삭제하시겠습니까?'))) return;
+        try {
+            await firebaseService.clearAllAnnouncements(activeEvent.id);
+            showAlert('전체 삭제 완료', '모든 공지 기록이 초기화되었습니다.');
+        } catch (err) {
+            console.error('Failed to clear all announcements:', err);
+            showAlert('공지 전체 삭제에 실패했습니다.');
         }
     };
 
@@ -809,13 +852,72 @@ export default function Admin() {
             <div className="management-grid">
                 <aside className="mgmt-sidebar">
                     <section className="announcement-tool">
-                        <h3>실시간 공지 발송</h3>
+                        <div className="section-header-row">
+                            <h3>📢 실시간 공지 발송</h3>
+                        </div>
                         <textarea
                             placeholder="대의원 화면에 즉시 표시될 내용을 입력하세요..."
                             value={announcement}
                             onChange={(e) => setAnnouncement(e.target.value)}
                         />
                         <button className="btn-send" onClick={handleSendAnnouncement}>공지 즉시 발송</button>
+
+                        {/* 1. Currently Active Live Broadcast Card */}
+                        {activeEvent?.current_announcement && (
+                            <div className="active-broadcast-card">
+                                <div className="broadcast-card-header">
+                                    <span className="live-pulse-badge">🔴 송출 중</span>
+                                    <button 
+                                        className="btn-clear-broadcast"
+                                        onClick={handleClearCurrentAnnouncement}
+                                        title="현재 송출 중인 공지 삭제 및 중단"
+                                    >
+                                        🚫 송출 중단
+                                    </button>
+                                </div>
+                                <div className="broadcast-msg">{activeEvent.current_announcement}</div>
+                            </div>
+                        )}
+
+                        {/* 2. Sent Announcements History */}
+                        <div className="announcement-history-section">
+                            <div className="history-header">
+                                <h4>발송된 공지 기록 ({announcementHistory.length})</h4>
+                                {announcementHistory.length > 0 && (
+                                    <button 
+                                        className="btn-clear-all-history"
+                                        onClick={handleClearAllAnnouncements}
+                                        title="발송된 모든 테스트 공지 삭제"
+                                    >
+                                        전체 삭제
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="history-list">
+                                {announcementHistory.map((item) => (
+                                    <div key={item.id} className="history-item">
+                                        <div className="history-item-header">
+                                            <span className="history-time">
+                                                {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '방금 전'}
+                                            </span>
+                                            <button 
+                                                className="btn-delete-history-item"
+                                                onClick={() => handleDeleteAnnouncement(item.id, item.message)}
+                                                title="이 공지 삭제"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                        <div className="history-text">{item.message}</div>
+                                    </div>
+                                ))}
+
+                                {announcementHistory.length === 0 && (
+                                    <div className="empty-history-text">발송된 공지 기록이 없습니다.</div>
+                                )}
+                            </div>
+                        </div>
                     </section>
                     
                     <section className="connection-integrity-card">

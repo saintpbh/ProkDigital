@@ -2,6 +2,11 @@ import {
   collection, 
   doc,
   setDoc,
+  addDoc,
+  deleteDoc,
+  updateDoc,
+  getDocs,
+  orderBy,
   serverTimestamp,
   onSnapshot, 
   query, 
@@ -122,6 +127,88 @@ export const firebaseService = {
       });
       onUpdate(items);
     });
+  },
+
+  /**
+   * Listen to all announcements for an event in real-time
+   */
+  subscribeToAnnouncements: (eventId: string, onUpdate: (announcements: any[]) => void) => {
+    const q = query(
+      collection(db, 'events', eventId, 'announcements'),
+      orderBy('created_at', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      onUpdate(items);
+    }, (err) => {
+      console.warn('[Firebase] Announcements fallback order without index:', err);
+      // Fallback query if index is building
+      const fallbackQ = collection(db, 'events', eventId, 'announcements');
+      return onSnapshot(fallbackQ, (fallbackSnap) => {
+        const fallbackItems = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        fallbackItems.sort((a: any, b: any) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        onUpdate(fallbackItems);
+      });
+    });
+  },
+
+  /**
+   * Broadcast an announcement and persist in event's announcements subcollection
+   */
+  sendAnnouncement: async (eventId: string, message: string) => {
+    const cleanMsg = message.trim();
+    if (!cleanMsg) return;
+
+    // 1. Update active event current announcement
+    await updateDoc(doc(db, 'events', eventId), {
+      current_announcement: cleanMsg,
+      current_announcement_ts: Date.now(),
+    });
+
+    // 2. Persist in announcements history
+    await addDoc(collection(db, 'events', eventId, 'announcements'), {
+      message: cleanMsg,
+      timestamp: new Date().toISOString(),
+      created_at: serverTimestamp()
+    });
+  },
+
+  /**
+   * Clear active announcement broadcast banner
+   */
+  clearCurrentAnnouncement: async (eventId: string) => {
+    await updateDoc(doc(db, 'events', eventId), {
+      current_announcement: '',
+      current_announcement_ts: Date.now(),
+    });
+  },
+
+  /**
+   * Delete a single announcement from history
+   */
+  deleteAnnouncement: async (eventId: string, announcementId: string, message?: string, currentAnnouncement?: string) => {
+    await deleteDoc(doc(db, 'events', eventId, 'announcements', announcementId));
+    if (message && currentAnnouncement && message.trim() === currentAnnouncement.trim()) {
+      await updateDoc(doc(db, 'events', eventId), {
+        current_announcement: '',
+        current_announcement_ts: Date.now(),
+      });
+    }
+  },
+
+  /**
+   * Clear all announcements history and active broadcast
+   */
+  clearAllAnnouncements: async (eventId: string) => {
+    await updateDoc(doc(db, 'events', eventId), {
+      current_announcement: '',
+      current_announcement_ts: Date.now(),
+    });
+
+    const snap = await getDocs(collection(db, 'events', eventId, 'announcements'));
+    const deletePromises = snap.docs.map(d => deleteDoc(doc(db, 'events', eventId, 'announcements', d.id)));
+    await Promise.all(deletePromises);
   },
 
   /**

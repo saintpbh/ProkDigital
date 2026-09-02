@@ -3,6 +3,7 @@ import { firebaseService, type EventData } from '../services/firebaseService';
 
 export interface FirebaseSyncOptions {
   onAnnouncement?: (msg: string) => void;
+  onAnnouncementsListUpdate?: (announcements: any[]) => void;
   onNewFilePublished?: (url: string) => void;
   onFileUpdate?: () => void;
   onLinkUpdate?: () => void;
@@ -16,6 +17,7 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
   const [files, setFiles] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [lastPublishedFile, setLastPublishedFile] = useState<any>(null);
 
   const optionsRef = useRef(options);
@@ -27,8 +29,8 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
     // 1. Subscribe to Event metadata (Announcements, Passcode changes, etc.)
     const unsubscribeEvent = firebaseService.subscribeToEvent(token, (data) => {
       setEvent(data);
-      if (data.current_announcement && optionsRef.current?.onAnnouncement) {
-        optionsRef.current.onAnnouncement(data.current_announcement);
+      if (optionsRef.current?.onAnnouncement) {
+        optionsRef.current.onAnnouncement(data.current_announcement || '');
       }
       if (optionsRef.current?.onEventUpdate) {
         optionsRef.current.onEventUpdate(data);
@@ -76,11 +78,18 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
       if (optionsRef.current?.onScheduleUpdate) optionsRef.current.onScheduleUpdate(newSchedules);
     });
 
+    // 6. Subscribe to Announcements List
+    const unsubscribeAnnouncements = firebaseService.subscribeToAnnouncements(event.id, (newAnnouncements) => {
+      setAnnouncements(newAnnouncements);
+      if (optionsRef.current?.onAnnouncementsListUpdate) optionsRef.current.onAnnouncementsListUpdate(newAnnouncements);
+    });
+
     return () => {
       unsubscribeFiles();
       unsubscribeLinks();
       unsubscribeVotes();
       unsubscribeSchedules();
+      unsubscribeAnnouncements();
     };
   }, [event?.id]);
 
@@ -89,8 +98,10 @@ export const useFirebaseSync = (token: string | null, options?: FirebaseSyncOpti
     files,
     links,
     schedules,
+    announcements,
     setFiles,
     setLinks,
-    setSchedules
+    setSchedules,
+    setAnnouncements
   };
 };
