@@ -16,19 +16,27 @@ try {
   }
   const messaging = firebase.messaging();
 
+  // Background message handler: Only display notification if FCM SDK has not automatically displayed one
   messaging.onBackgroundMessage((payload) => {
     console.log("[SW] Background message received:", payload);
-    const title = payload.notification?.title || payload.data?.title || "한국기독교장로회 디지털 총회";
-    const options = {
-      body: payload.notification?.body || payload.data?.body || "새로운 총회 알림이 도착했습니다.",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      vibrate: [200, 100, 200],
-      data: {
-        url: payload.fcmOptions?.link || payload.data?.url || "https://digital.prok.or.kr/"
-      }
-    };
-    self.registration.showNotification(title, options);
+    
+    // When FCM sends a payload with top-level 'notification', Firebase SDK automatically renders it.
+    // We only manually call showNotification if 'notification' is absent (data-only push):
+    if (!payload.notification) {
+      const title = payload.data?.title || "한국기독교장로회 디지털 총회";
+      const options = {
+        body: payload.data?.body || "새로운 총회 알림이 도착했습니다.",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        tag: payload.data?.tag || "prok-notice",
+        renotify: true,
+        vibrate: [200, 100, 200],
+        data: {
+          url: payload.data?.url || "https://digital.prok.or.kr/"
+        }
+      };
+      self.registration.showNotification(title, options);
+    }
   });
 } catch (err) {
   console.error("[SW] Firebase init error:", err);
@@ -40,35 +48,6 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
-});
-
-// Fallback native push event listener for raw WebPush payloads on iOS Safari PWA
-self.addEventListener("push", (event) => {
-  if (event.data) {
-    try {
-      const payload = event.data.json();
-      console.log("[SW] Native push payload:", payload);
-      const title = payload.notification?.title || payload.data?.title || "한국기독교장로회 디지털 총회";
-      const options = {
-        body: payload.notification?.body || payload.data?.body || "새로운 총회 알림이 도착했습니다.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        vibrate: [200, 100, 200],
-        data: {
-          url: payload.fcmOptions?.link || payload.data?.url || "https://digital.prok.or.kr/"
-        }
-      };
-      event.waitUntil(self.registration.showNotification(title, options));
-    } catch (e) {
-      const options = {
-        body: event.data.text() || "새로운 총회 알림이 도착했습니다.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        data: { url: "https://digital.prok.or.kr/" }
-      };
-      event.waitUntil(self.registration.showNotification("한국기독교장로회 디지털 총회", options));
-    }
-  }
 });
 
 self.addEventListener("notificationclick", (event) => {

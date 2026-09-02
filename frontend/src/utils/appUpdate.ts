@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.7.3 (총회 기간 외 NOW 뱃지 100% 완전 차단)';
+export const APP_VERSION = 'v2.7.4 (푸시 알림 3중 중복 수신 원천 제거 및 단일 알림 보장)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

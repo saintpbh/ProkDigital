@@ -100,18 +100,44 @@ exports.castVote = functions.https.onRequest(async (req, res) => {
     }
 });
 
-// Helper to send multicast push with batching (max 500 per batch)
-async function sendMulticastPush(tokens, payload) {
+// Helper to send multicast push with batching (max 500 per batch) and token cleanup
+async function sendMulticastPush(eventId, tokens, payload) {
     if (!tokens || tokens.length === 0) return;
-    for (let i = 0; i < tokens.length; i += 500) {
-        const chunk = tokens.slice(i, i + 500);
+    const uniqueTokens = [...new Set(tokens.filter(Boolean))];
+    
+    for (let i = 0; i < uniqueTokens.length; i += 500) {
+        const chunk = uniqueTokens.slice(i, i + 500);
         try {
-            await admin.messaging().sendEachForMulticast({
+            const response = await admin.messaging().sendEachForMulticast({
                 tokens: chunk,
                 notification: payload.notification,
                 webpush: payload.webpush,
                 data: payload.data
             });
+            
+            // Clean up invalid or unregistered tokens
+            if (response.failureCount > 0 && eventId) {
+                const batch = db.batch();
+                let cleanupCount = 0;
+                response.responses.forEach((resp, idx) => {
+                    if (!resp.success && resp.error) {
+                        const errCode = resp.error.code;
+                        if (
+                            errCode === 'messaging/registration-token-not-registered' ||
+                            errCode === 'messaging/invalid-registration-token'
+                        ) {
+                            const invalidToken = chunk[idx];
+                            const tokenRef = db.collection("events").doc(eventId).collection("delegateTokens").doc(invalidToken);
+                            batch.delete(tokenRef);
+                            cleanupCount++;
+                        }
+                    }
+                });
+                if (cleanupCount > 0) {
+                    await batch.commit();
+                    console.log(`Cleaned up ${cleanupCount} invalid FCM tokens for event ${eventId}`);
+                }
+            }
         } catch (err) {
             console.error("Error sending batch push:", err);
         }
@@ -124,6 +150,7 @@ exports.sendAnnouncementPush = functions.firestore
     .onUpdate(async (change, context) => {
     const before = change.before.data();
     const after = change.after.data();
+    const eventId = context.params.eventId;
     
     const isNew = after.current_announcement && (
         before.current_announcement !== after.current_announcement ||
@@ -132,10 +159,10 @@ exports.sendAnnouncementPush = functions.firestore
 
     if (isNew) {
         try {
-            const tokensSnap = await db.collection("events").doc(context.params.eventId).collection("delegateTokens").get();
+            const tokensSnap = await db.collection("events").doc(eventId).collection("delegateTokens").get();
             if (tokensSnap.empty) return;
             
-            const tokens = tokensSnap.docs.map(doc => doc.data().token);
+            const tokens = [...new Set(tokensSnap.docs.map(doc => doc.data().token).filter(Boolean))];
             const cleanTitle = (after.name || "디지털 총회") + " 공지사항";
             const cleanBody = String(after.current_announcement).replace(/[📢📣]/g, '').trim();
 
@@ -150,6 +177,8 @@ exports.sendAnnouncementPush = functions.firestore
                         body: cleanBody,
                         icon: "/icon-192.png",
                         badge: "/icon-192.png",
+                        tag: "prok-announcement",
+                        renotify: true,
                         vibrate: [200, 100, 200]
                     },
                     fcmOptions: {
@@ -164,7 +193,7 @@ exports.sendAnnouncementPush = functions.firestore
                 }
             };
             
-            await sendMulticastPush(tokens, payload);
+            await sendMulticastPush(eventId, tokens, payload);
         } catch (error) {
             console.error("Error sending announcement push:", error);
         }
@@ -187,7 +216,7 @@ exports.sendVotePush = functions.firestore
             const tokensSnap = await db.collection("events").doc(eventId).collection("delegateTokens").get();
             if (tokensSnap.empty) return;
 
-            const tokens = tokensSnap.docs.map(doc => doc.data().token);
+            const tokens = [...new Set(tokensSnap.docs.map(doc => doc.data().token).filter(Boolean))];
             const payload = {
                 notification: {
                     title: "🗳️ 새로운 투표가 시작되었습니다",
@@ -199,6 +228,8 @@ exports.sendVotePush = functions.firestore
                         body: after.question,
                         icon: "/icon-192.png",
                         badge: "/icon-192.png",
+                        tag: "prok-vote",
+                        renotify: true,
                         vibrate: [200, 100, 200]
                     },
                     fcmOptions: {
@@ -211,7 +242,7 @@ exports.sendVotePush = functions.firestore
                 }
             };
 
-            await sendMulticastPush(tokens, payload);
+            await sendMulticastPush(eventId, tokens, payload);
         } catch (error) {
             console.error("Error sending vote push:", error);
         }
@@ -236,7 +267,7 @@ exports.sendFilePush = functions.firestore
             const tokensSnap = await db.collection("events").doc(eventId).collection("delegateTokens").get();
             if (tokensSnap.empty) return;
 
-            const tokens = tokensSnap.docs.map(doc => doc.data().token);
+            const tokens = [...new Set(tokensSnap.docs.map(doc => doc.data().token).filter(Boolean))];
             const payload = {
                 notification: {
                     title: "📄 새로운 회의 문서 공유",
@@ -247,7 +278,9 @@ exports.sendFilePush = functions.firestore
                         title: "📄 새로운 회의 문서 공유",
                         body: `"${after.title}" 문서가 공유되었습니다.`,
                         icon: "/icon-192.png",
-                        badge: "/icon-192.png"
+                        badge: "/icon-192.png",
+                        tag: "prok-file",
+                        renotify: true
                     },
                     fcmOptions: {
                         link: "https://digital.prok.or.kr/"
@@ -259,7 +292,7 @@ exports.sendFilePush = functions.firestore
                 }
             };
 
-            await sendMulticastPush(tokens, payload);
+            await sendMulticastPush(eventId, tokens, payload);
         } catch (error) {
             console.error("Error sending file push:", error);
         }
