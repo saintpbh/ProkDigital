@@ -1288,7 +1288,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  overflow-y: scroll;   /* iOS: 'scroll' is more reliable than 'auto' */
+  overflow-y: scroll;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
@@ -1296,6 +1296,10 @@
   padding: 8px 4px 32px;
   box-sizing: border-box;
   touch-action: pan-y;
+  /* Force GPU compositing layer for reliable iOS scroll */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
 }
 .fast-pdf-skeleton-loader {
   position: absolute;
