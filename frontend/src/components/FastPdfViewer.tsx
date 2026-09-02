@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getCachedBlobUrl, getInstantBlobUrl } from '../utils/pdfCache';
 import { haptic } from '../utils/haptic';
@@ -21,6 +21,29 @@ interface PageMeta {
   originalHeight: number;
 }
 
+function getSavedProgress(pdfUrl: string): { page: number; scrollTop: number } | null {
+  if (typeof window === 'undefined' || !pdfUrl) return null;
+  try {
+    const raw = localStorage.getItem(`prok_pdf_pos_${encodeURIComponent(pdfUrl)}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Failed to load pdf progress', e);
+  }
+  return null;
+}
+
+function saveProgress(pdfUrl: string, page: number, scrollTop: number) {
+  if (typeof window === 'undefined' || !pdfUrl) return;
+  try {
+    localStorage.setItem(
+      `prok_pdf_pos_${encodeURIComponent(pdfUrl)}`,
+      JSON.stringify({ page, scrollTop, ts: Date.now() })
+    );
+  } catch (e) {
+    console.warn('Failed to save pdf progress', e);
+  }
+}
+
 export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   url,
   title = '문서 열람',
@@ -32,6 +55,13 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [pages, setPages] = useState<PageMeta[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(() => {
+    const saved = getSavedProgress(url);
+    return saved?.page || 1;
+  });
+  const [resumeToast, setResumeToast] = useState<string | null>(null);
+  const [isJumpModalOpen, setIsJumpModalOpen] = useState<boolean>(false);
+  const [jumpInputVal, setJumpInputVal] = useState<string>('');
   const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.0); // 1.0 = 100% Auto-fit width
   const [containerWidth, setContainerWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -42,6 +72,8 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
   const [useCanvasMode, setUseCanvasMode] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<any>(null);
+  const isAutoScrollingRef = useRef<boolean>(false);
+  const scrollTimeoutRef = useRef<any>(null);
 
   // Measure container width dynamically on resize & orientation change
   useEffect(() => {
@@ -136,6 +168,29 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         if (!isCancelled) {
           setPages(pageMetas);
           setIsLoading(false);
+
+          // 3. Auto-Resume to previously viewed page
+          const saved = getSavedProgress(url);
+          if (saved && saved.page > 1) {
+            isAutoScrollingRef.current = true;
+            setCurrentPage(saved.page);
+            setResumeToast(`📍 ${saved.page}페이지 이어보기 복원`);
+            setTimeout(() => {
+              const targetEl = document.getElementById(`pdf-page-card-${saved.page}`);
+              if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+              } else if (containerRef.current && saved.scrollTop) {
+                containerRef.current.scrollTop = saved.scrollTop;
+              }
+              setTimeout(() => {
+                isAutoScrollingRef.current = false;
+              }, 400);
+            }, 80);
+
+            setTimeout(() => {
+              setResumeToast(null);
+            }, 2500);
+          }
         }
       })
       .catch((err) => {
@@ -149,7 +204,60 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [blobUrl]);
+  }, [blobUrl, url]);
+
+  // 4. Track visible page & save scroll progress automatically
+  const handleScroll = useCallback(() => {
+    if (isAutoScrollingRef.current || !containerRef.current || pages.length === 0) return;
+
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    scrollTimeoutRef.current = setTimeout(() => {
+      if (!containerRef.current) return;
+      const containerTop = containerRef.current.getBoundingClientRect().top;
+      const containerCenter = containerTop + containerRef.current.clientHeight / 3;
+
+      let detectedPage = 1;
+      let minDistance = Infinity;
+
+      for (const page of pages) {
+        const el = document.getElementById(`pdf-page-card-${page.pageNumber}`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const distance = Math.abs(rect.top - containerCenter);
+          if (distance < minDistance) {
+            minDistance = distance;
+            detectedPage = page.pageNumber;
+          }
+        }
+      }
+
+      setCurrentPage(detectedPage);
+      saveProgress(url, detectedPage, containerRef.current.scrollTop);
+    }, 60);
+  }, [pages, url]);
+
+  // Smooth Scroll to specific page
+  const scrollToPage = (targetPage: number) => {
+    haptic.button();
+    const pageNum = Math.max(1, Math.min(targetPage, numPages || 1));
+    setCurrentPage(pageNum);
+    setIsJumpModalOpen(false);
+
+    const targetEl = document.getElementById(`pdf-page-card-${pageNum}`);
+    if (targetEl) {
+      isAutoScrollingRef.current = true;
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        isAutoScrollingRef.current = false;
+        if (containerRef.current) {
+          saveProgress(url, pageNum, containerRef.current.scrollTop);
+        }
+      }, 500);
+    }
+  };
 
   // Zoom Handlers
   const handleZoomIn = () => {
@@ -167,21 +275,63 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
     setZoomMultiplier(1.0); // 1.0 = Default 100% Fit Width
   };
 
+  const handleJumpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseInt(jumpInputVal, 10);
+    if (!isNaN(p) && p >= 1 && p <= numPages) {
+      scrollToPage(p);
+    }
+  };
+
   return (
     <div className={`fast-pdf-viewer ${isSplitView ? 'is-split' : 'is-modal'}`}>
       {/* Floating Fast Viewer Toolbar */}
       <div className="fast-pdf-toolbar">
         <div className="toolbar-left">
           <span className="pdf-type-badge">PDF</span>
-          {numPages > 0 && <span className="page-count-badge">총 {numPages}p</span>}
           <span className="pdf-title-text" title={title}>{title}</span>
         </div>
+
+        {/* 📖 Interactive Page Navigation & Quick Jump */}
+        {numPages > 0 && (
+          <div className="toolbar-page-nav">
+            <button 
+              className="btn-page-step" 
+              onClick={() => scrollToPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+              title="이전 페이지"
+            >
+              ◀
+            </button>
+            <button 
+              className="btn-page-indicator" 
+              onClick={() => {
+                haptic.modal();
+                setJumpInputVal(String(currentPage));
+                setIsJumpModalOpen(!isJumpModalOpen);
+              }}
+              title="페이지 직접 이동"
+            >
+              <span className="current-p">{currentPage}</span>
+              <span className="divider">/</span>
+              <span className="total-p">{numPages}p</span>
+            </button>
+            <button 
+              className="btn-page-step" 
+              onClick={() => scrollToPage(currentPage + 1)}
+              disabled={currentPage >= numPages}
+              title="다음 페이지"
+            >
+              ▶
+            </button>
+          </div>
+        )}
 
         <div className="toolbar-controls">
           <button 
             className="btn-tool" 
             onClick={handleZoomOut} 
-            title="축소 (작게)"
+            title="축소"
             disabled={zoomMultiplier <= 0.5}
           >
             🔍-
@@ -191,12 +341,12 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
             onClick={handleFitWidth} 
             title="가로폭 맞춤 (기본 100%)"
           >
-            ↔ {Math.round(zoomMultiplier * 100)}% {zoomMultiplier === 1.0 ? '(폭맞춤)' : ''}
+            ↔ {Math.round(zoomMultiplier * 100)}%
           </button>
           <button 
             className="btn-tool" 
             onClick={handleZoomIn} 
-            title="확대 (크게)"
+            title="확대"
             disabled={zoomMultiplier >= 3.0}
           >
             🔍+
@@ -226,8 +376,57 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         </div>
       </div>
 
+      {/* Auto-Resume Floating Toast Notification */}
+      {resumeToast && (
+        <div className="pdf-resume-toast">
+          <span>{resumeToast}</span>
+          <button 
+            className="btn-resume-top" 
+            onClick={() => scrollToPage(1)}
+            title="첫 페이지(1p)로 이동"
+          >
+            ⤒ 처음(1p)으로
+          </button>
+        </div>
+      )}
+
+      {/* Quick Page Jump Modal / Popover */}
+      {isJumpModalOpen && (
+        <div className="page-jump-popover-overlay" onClick={() => setIsJumpModalOpen(false)}>
+          <div className="page-jump-popover" onClick={(e) => e.stopPropagation()}>
+            <div className="jump-header">
+              <h4>페이지 이동</h4>
+              <button className="btn-close-pop" onClick={() => setIsJumpModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleJumpSubmit} className="jump-form">
+              <div className="jump-input-wrap">
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={numPages} 
+                  value={jumpInputVal} 
+                  onChange={(e) => setJumpInputVal(e.target.value)}
+                  autoFocus
+                  placeholder={`1 ~ ${numPages}`}
+                  className="jump-input"
+                />
+                <span className="jump-max-tag">/ {numPages}p</span>
+              </div>
+              <button type="submit" className="btn-jump-go">이동</button>
+            </form>
+            <div className="jump-quick-tags">
+              <button onClick={() => scrollToPage(1)}>1p (처음)</button>
+              {numPages >= 10 && <button onClick={() => scrollToPage(Math.round(numPages * 0.25))}>{Math.round(numPages * 0.25)}p</button>}
+              {numPages >= 10 && <button onClick={() => scrollToPage(Math.round(numPages * 0.5))}>{Math.round(numPages * 0.5)}p (중간)</button>}
+              {numPages >= 10 && <button onClick={() => scrollToPage(Math.round(numPages * 0.75))}>{Math.round(numPages * 0.75)}p</button>}
+              <button onClick={() => scrollToPage(numPages)}>{numPages}p (마지막)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PDF Content Area */}
-      <div className="fast-pdf-body" ref={containerRef}>
+      <div className="fast-pdf-body" ref={containerRef} onScroll={handleScroll}>
         {isLoading && (
           <div className="fast-pdf-skeleton-loader">
             <div className="loader-spinner"></div>
@@ -248,7 +447,7 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
         {useCanvasMode && !loadError && (
           <div className="pdf-canvas-container">
             {pages.map((pageMeta) => {
-              // Calculate width that fits the container (with 24px padding margin)
+              // Calculate width that fits the container (with 28px padding margin)
               const availableWidth = Math.max(containerWidth - 28, 280);
               const targetWidth = availableWidth * zoomMultiplier;
 
@@ -340,6 +539,7 @@ const PdfPageCanvas: React.FC<{
 
   return (
     <div 
+      id={`pdf-page-card-${pageNumber}`}
       className={`pdf-page-card ${isRendered ? 'is-ready' : 'is-loading'}`}
       style={{ width: `${Math.floor(targetWidth)}px`, minHeight: `${Math.floor(targetHeight)}px` }}
     >
