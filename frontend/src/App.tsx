@@ -54,20 +54,20 @@ function parseTimeRangeToMinutes(timeStr: string): { startMin: number; endMin: n
 function findActiveSchedule(schedules: any[]): { activeItem: any | null; isExplicit: boolean } {
   if (!schedules || schedules.length === 0) return { activeItem: null, isExplicit: false };
 
-  // 1. Explicit admin live mark (NOW) - Takes top priority at any time
-  const explicit = schedules.find((s: any) => s.is_current);
-  if (explicit) return { activeItem: explicit, isExplicit: true };
-
-  // 2. Real-time date & time match
   const now = new Date();
   const todayConferenceDay = getConferenceDayForDate(now);
 
-  // If today is NOT during the conference (e.g. 9월 2일), do not auto-match by clock
+  // If today is NOT during the conference dates (9/15, 9/16, 9/17):
+  // Never auto-activate or show NOW before the conference starts!
   if (!todayConferenceDay) {
     return { activeItem: null, isExplicit: false };
   }
 
-  // Filter schedules for today's day (e.g. 1일차 on 9/15)
+  // 1. Explicit admin live mark (NOW) on today's conference day
+  const explicit = schedules.find((s: any) => s.is_current && (s.day || '').includes(todayConferenceDay));
+  if (explicit) return { activeItem: explicit, isExplicit: true };
+
+  // 2. Real-time time match for today's conference day
   const todaySchedules = schedules.filter((s: any) => (s.day || '').includes(todayConferenceDay));
   if (todaySchedules.length === 0) {
     return { activeItem: null, isExplicit: false };
@@ -671,19 +671,21 @@ function App() {
             {/* Timeline List */}
             <div className="schedule-timeline">
               {filteredSchedules.map((item: any) => {
-                const isItemActive = activeScheduleInfo.activeItem?.id === item.id;
+                const isConferenceToday = getConferenceDayForDate(new Date()) !== null;
+                const isItemLive = isConferenceToday && item.is_current;
+                const isItemTimeMatched = isConferenceToday && (activeScheduleInfo.activeItem?.id === item.id);
                 return (
                   <div 
                     key={item.id} 
                     id={`schedule-card-${item.id}`}
-                    className={`schedule-card ${item.is_current ? 'is-live-current' : (isItemActive ? 'is-time-focused' : '')}`}
+                    className={`schedule-card ${isItemLive ? 'is-live-current' : (isItemTimeMatched ? 'is-time-focused' : '')}`}
                   >
-                    {item.is_current ? (
+                    {isItemLive ? (
                       <div className="live-now-badge">
                         <span className="dot pulse"></span>
                         🔴 NOW 진행 중
                       </div>
-                    ) : isItemActive ? (
+                    ) : isItemTimeMatched ? (
                       <div className="live-now-badge time-matched">
                         <span className="dot pulse"></span>
                         🕒 현재 시간 일정

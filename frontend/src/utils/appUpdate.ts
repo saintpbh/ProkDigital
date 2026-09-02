@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.7.2 (총회 실제 일자 9/15~17 매칭 및 일정 날짜 표기 강화)';
+export const APP_VERSION = 'v2.7.3 (총회 기간 외 NOW 뱃지 100% 완전 차단)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {
