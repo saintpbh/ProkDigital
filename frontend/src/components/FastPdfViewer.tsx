@@ -384,12 +384,12 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
           </div>
         )}
 
-        {/* 1. Fast Canvas Mode with Auto-Fit Width & Zoom */}
+        {/* 1. Fast Canvas Mode with Auto-Fit Width */}
         {useCanvasMode && !loadError && (
           <div className="pdf-canvas-container">
             {pages.map((pageMeta) => {
-              // Calculate width that fits the container (with 28px padding margin)
-              const availableWidth = Math.max(containerWidth - 28, 280);
+              // iOS-safe width: subtract padding (8px×2=16px) to never exceed viewport
+              const availableWidth = Math.max(containerWidth - 16, 280);
               const targetWidth = availableWidth * zoomMultiplier;
 
               return (
@@ -482,7 +482,7 @@ const PdfPageCanvas: React.FC<{
     <div 
       id={`pdf-page-card-${pageNumber}`}
       className={`pdf-page-card ${isRendered ? 'is-ready' : 'is-loading'}`}
-      style={{ width: `${Math.floor(targetWidth)}px`, minHeight: `${Math.floor(targetHeight)}px` }}
+      style={{ width: `${Math.floor(targetWidth)}px`, maxWidth: '100%', minHeight: `${Math.floor(targetHeight)}px` }}
     >
       <canvas ref={canvasRef} className="pdf-page-canvas" />
       <span className="page-number-tag">{pageNumber}</span>

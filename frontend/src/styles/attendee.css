@@ -1292,15 +1292,14 @@
   min-height: 0;        /* CRITICAL: iOS flex scroll fix — allows overflow inside flex child */
   width: 100%;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;   /* CRITICAL: iOS blocks vertical scroll if horizontal scroll exists */
   background: #334155;
   position: relative;
   -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
-  overscroll-behavior: contain;      /* Prevent scroll chaining to parent */
-  padding: 16px 8px 32px;
+  overscroll-behavior-y: contain;    /* Prevent scroll chaining to parent */
+  padding: 12px 4px 32px;
   box-sizing: border-box;
-  /* Allow vertical pan/scroll (iOS), do NOT block touch */
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;  /* iOS: only vertical scroll, no horizontal gesture conflict */
 }
 .fast-pdf-skeleton-loader {
   position: absolute;
@@ -1329,31 +1328,28 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
-  min-width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
-  /* Ensure container itself doesn't block touch */
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
 }
 .pdf-page-card {
   background: #ffffff;
   border-radius: 4px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
   margin: 0 auto;
   box-sizing: border-box;
-  transition: width 0.15s ease-out;
-  /* Canvas touch passthrough — allow scroll over canvas */
-  touch-action: pan-y pinch-zoom;
+  max-width: 100%;    /* Never exceed container width */
+  touch-action: pan-y;
 }
 .pdf-page-canvas {
   display: block;
   width: 100% !important;
   height: auto !important;
-  /* CRITICAL iOS fix: canvas must allow touch scroll-through */
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-y;
   pointer-events: none;  /* Let parent handle all touch — canvas is display-only */
 }
 .page-number-tag {
