@@ -77,6 +77,12 @@ export default function Admin() {
     const [newAdminUsername, setNewAdminUsername] = useState('');
     const [newAdminPassword, setNewAdminPassword] = useState('');
 
+    // Attendee List Modal & Filter
+    const [isAttendeeListModalOpen, setIsAttendeeListModalOpen] = useState(false);
+    const [attendeesList, setAttendeesList] = useState<any[]>([]);
+    const [attendeeFilterTab, setAttendeeFilterTab] = useState<'ALL' | 'LIVE' | 'STANDALONE'>('ALL');
+    const [attendeeSearchQuery, setAttendeeSearchQuery] = useState('');
+
     // Generic Modal Hook
     const { modal, showAlert, showConfirm, showPrompt, close: closeModal } = useModal();
 
@@ -171,7 +177,13 @@ export default function Admin() {
         const unsub = firebaseService.subscribeToLiveStats(activeEvent.id, (stats) => {
             setLiveStats(stats);
         });
-        return () => unsub();
+        const unsubList = firebaseService.subscribeToAttendeeList(activeEvent.id, (list) => {
+            setAttendeesList(list);
+        });
+        return () => {
+            unsub();
+            unsubList();
+        };
     }, [activeEvent?.id]);
 
     // Listen to announcement history for active event (real-time)
@@ -286,6 +298,63 @@ export default function Admin() {
             console.error('Failed to clear all announcements:', err);
             showAlert('공지 전체 삭제에 실패했습니다.');
         }
+    };
+
+    const handleClearAllAttendees = async () => {
+        if (!activeEvent?.id) return;
+        if (!(await showConfirm('테스트 접속자 기록 초기화', `지금까지 테스트로 등록된 총 ${attendeesList.length}명의 접속자 기록을 초기화하시겠습니까?\n\n총회 당일 새로운 실제 총대 접속 통계를 위해 0명으로 리셋됩니다.`))) return;
+        try {
+            await firebaseService.clearAllAttendees(activeEvent.id);
+            showAlert('초기화 완료', '모든 접속자 기록이 초기화되었습니다. 실시간 카운트가 0명으로 리셋되었습니다.');
+        } catch (err) {
+            console.error('Failed to clear all attendees:', err);
+            showAlert('초기화 중 오류가 발생했습니다.');
+        }
+    };
+
+    const parseAttendeeDevice = (userAgent?: string, isStandalone?: boolean) => {
+        if (!userAgent) return { label: isStandalone ? '📱 PWA 앱' : '🌐 웹 브라우저', os: '기타', browser: '기타' };
+        const ua = userAgent.toLowerCase();
+        let os = '기타 기기';
+        let icon = '💻';
+        
+        if (ua.includes('iphone')) {
+            os = 'iPhone';
+            icon = '📱';
+        } else if (ua.includes('ipad')) {
+            os = 'iPad';
+            icon = '📱';
+        } else if (ua.includes('android')) {
+            os = 'Android (갤럭시 등)';
+            icon = '📱';
+        } else if (ua.includes('macintosh') || ua.includes('mac os')) {
+            os = 'Mac (맥북/iMac)';
+            icon = '💻';
+        } else if (ua.includes('windows')) {
+            os = 'Windows PC';
+            icon = '💻';
+        }
+
+        let browser = '웹 브라우저';
+        if (isStandalone) {
+            browser = '홈화면 PWA 앱';
+        } else if (ua.includes('kakaotalk')) {
+            browser = '카카오톡 인앱';
+        } else if (ua.includes('crios') || (ua.includes('chrome') && !ua.includes('edg'))) {
+            browser = 'Chrome';
+        } else if (ua.includes('safari') && !ua.includes('chrome')) {
+            browser = 'Safari';
+        } else if (ua.includes('edg')) {
+            browser = 'Edge';
+        } else if (ua.includes('whale')) {
+            browser = 'Whale';
+        }
+
+        return {
+            label: `${icon} ${os} (${browser})`,
+            os,
+            browser
+        };
     };
 
     // ==========================================
@@ -841,19 +910,29 @@ export default function Admin() {
                 </div>
 
                 <div className="header-live-stats-bar">
-                    <div className="stat-pill live" title="최근 60초 이내 활동 중인 실시간 접속자 수">
+                    <div 
+                        className="stat-pill live clickable-pill" 
+                        onClick={() => { setAttendeeFilterTab('LIVE'); setIsAttendeeListModalOpen(true); }}
+                        title="클릭하여 현재 실시간 접속 중인 총대 명단 확인"
+                    >
                         <span className="live-dot-pulse"></span>
                         <span className="stat-label">현재 실시간 접속</span>
                         <strong className="stat-val">{liveStats.liveCount}명</strong>
+                        <span className="pill-more-hint">명단보기 〉</span>
                     </div>
 
-                    <div className="stat-pill registered" title="비밀번호를 입력하고 입장한 총 로그인(등록) 인원">
+                    <div 
+                        className="stat-pill registered clickable-pill" 
+                        onClick={() => { setAttendeeFilterTab('ALL'); setIsAttendeeListModalOpen(true); }}
+                        title="클릭하여 로그인 완료(등록) 총대 전체 명단 확인"
+                    >
                         <span className="stat-icon">👥</span>
                         <span className="stat-label">로그인 완료(등록)</span>
                         <strong className="stat-val">{liveStats.registeredCount}명</strong>
                         {liveStats.standaloneCount > 0 && (
                             <span className="stat-sub">(앱설치 {liveStats.standaloneCount}명)</span>
                         )}
+                        <span className="pill-more-hint">명단보기 〉</span>
                     </div>
 
                     <div className="live-badge">LIVE</div>
@@ -1511,6 +1590,156 @@ export default function Admin() {
                     <div className="modal-actions">
                         <button className="btn-cancel" onClick={() => { setIsBatchScheduleModalOpen(false); setBatchScheduleText(''); }}>취소</button>
                         <button className="btn-confirm" onClick={handleBatchScheduleSubmit}>일괄 등록하기</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* 👥 Attendee List Modal (접속 및 등록 총대 상세 현황) */}
+        {isAttendeeListModalOpen && (
+            <div className="admin-modal-overlay attendee-list-modal-overlay" onClick={() => setIsAttendeeListModalOpen(false)}>
+                <div className="admin-modal attendee-list-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="attendee-modal-header">
+                        <div>
+                            <h3>👥 총대 접속 및 출석 현황 (총 {attendeesList.length}명)</h3>
+                            <p className="modal-subtitle">
+                                총회에 입장한 총대 기기 식별 ID, 앱 설치(PWA) 여부 및 실시간 활동 상태입니다.
+                            </p>
+                        </div>
+                        <div className="modal-header-actions">
+                            <button 
+                                className="btn-danger-outline"
+                                onClick={handleClearAllAttendees}
+                                title="총회 전 지금까지 등록된 테스트 접속자 기록 전체 초기화"
+                            >
+                                🗑️ 테스트 접속 기록 초기화
+                            </button>
+                            <button className="btn-close-modal-x" onClick={() => setIsAttendeeListModalOpen(false)}>✕</button>
+                        </div>
+                    </div>
+
+                    {/* Filter Tabs & Search Bar */}
+                    <div className="attendee-modal-toolbar">
+                        <div className="attendee-filter-tabs">
+                            <button 
+                                className={`filter-tab-btn ${attendeeFilterTab === 'ALL' ? 'active' : ''}`}
+                                onClick={() => setAttendeeFilterTab('ALL')}
+                            >
+                                전체 등록 ({attendeesList.length}명)
+                            </button>
+                            <button 
+                                className={`filter-tab-btn ${attendeeFilterTab === 'LIVE' ? 'active' : ''}`}
+                                onClick={() => setAttendeeFilterTab('LIVE')}
+                            >
+                                🟢 실시간 접속 중 ({liveStats.liveCount}명)
+                            </button>
+                            <button 
+                                className={`filter-tab-btn ${attendeeFilterTab === 'STANDALONE' ? 'active' : ''}`}
+                                onClick={() => setAttendeeFilterTab('STANDALONE')}
+                            >
+                                📱 홈화면 앱 설치 ({liveStats.standaloneCount}명)
+                            </button>
+                        </div>
+                        <div className="attendee-search-box">
+                            <input 
+                                type="text"
+                                className="input-attendee-search"
+                                placeholder="🔍 기기 ID 또는 환경 검색..."
+                                value={attendeeSearchQuery}
+                                onChange={(e) => setAttendeeSearchQuery(e.target.value)}
+                            />
+                            {attendeeSearchQuery && (
+                                <button className="btn-clear-search" onClick={() => setAttendeeSearchQuery('')}>✕</button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Attendee Table */}
+                    <div className="attendee-modal-table-wrap">
+                        {(() => {
+                            let filtered = attendeesList;
+                            if (attendeeFilterTab === 'LIVE') {
+                                filtered = filtered.filter(a => a.is_live);
+                            } else if (attendeeFilterTab === 'STANDALONE') {
+                                filtered = filtered.filter(a => a.is_standalone);
+                            }
+
+                            if (attendeeSearchQuery.trim()) {
+                                const q = attendeeSearchQuery.toLowerCase();
+                                filtered = filtered.filter(a => 
+                                    (a.voter_id || a.id || '').toLowerCase().includes(q) ||
+                                    (a.user_agent || '').toLowerCase().includes(q)
+                                );
+                            }
+
+                            return (
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>No.</th>
+                                            <th>기기 식별 ID</th>
+                                            <th>실시간 상태</th>
+                                            <th>접속 환경</th>
+                                            <th>앱 설치 형태</th>
+                                            <th>최초 등록 시각</th>
+                                            <th>최근 활동</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filtered.map((att, idx) => {
+                                            const devInfo = parseAttendeeDevice(att.user_agent, att.is_standalone);
+                                            const loginDate = att.logged_in_at?.toDate 
+                                                ? att.logged_in_at.toDate().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                                                : '-';
+                                            const lastSeenDate = att.last_active_ts 
+                                                ? new Date(att.last_active_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+                                                : '-';
+
+                                            return (
+                                                <tr key={att.id || att.voter_id} className={att.is_live ? 'row-live-user' : ''}>
+                                                    <td><span className="user-index-num">{idx + 1}</span></td>
+                                                    <td>
+                                                        <code className="voter-id-badge">{att.voter_id || att.id}</code>
+                                                    </td>
+                                                    <td>
+                                                        {att.is_live ? (
+                                                            <span className="live-status-pill on">🟢 실시간 접속 중</span>
+                                                        ) : (
+                                                            <span className="live-status-pill off">⚪ 오프라인</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <span className="device-badge">{devInfo.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        {att.is_standalone ? (
+                                                            <span className="app-mode-badge pwa">📱 홈화면 앱(PWA)</span>
+                                                        ) : (
+                                                            <span className="app-mode-badge web">🌐 웹 브라우저</span>
+                                                        )}
+                                                    </td>
+                                                    <td><span className="time-sub-badge">{loginDate}</span></td>
+                                                    <td><span className="time-sub-badge">{att.is_live ? '방금 전 (활동 중)' : lastSeenDate}</span></td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {filtered.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="empty-state">
+                                                    {attendeeSearchQuery ? `"${attendeeSearchQuery}" 검색 조건에 일치하는 총대가 없습니다.` : '해당 조건의 총대 접속 기록이 없습니다.'}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            );
+                        })()}
+                    </div>
+                    <div className="attendee-modal-footer">
+                        <div className="attendee-summary-stats">
+                            총 등록: <strong>{attendeesList.length}명</strong> (실시간 <strong>{liveStats.liveCount}명</strong> · 홈화면 앱설치 <strong>{liveStats.standaloneCount}명</strong>)
+                        </div>
+                        <button className="btn-secondary" onClick={() => setIsAttendeeListModalOpen(false)}>닫기</button>
                     </div>
                 </div>
             </div>

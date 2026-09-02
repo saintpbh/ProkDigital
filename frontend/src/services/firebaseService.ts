@@ -6,6 +6,7 @@ import {
   deleteDoc,
   updateDoc,
   getDocs,
+  writeBatch,
   orderBy,
   serverTimestamp,
   onSnapshot, 
@@ -299,6 +300,76 @@ export const firebaseService = {
       unsubscribePresence();
       clearInterval(intervalId);
     };
+  },
+
+  /**
+   * Subscribe to full attendee details with live presence status
+   */
+  subscribeToAttendeeList: (
+    eventId: string,
+    onUpdate: (attendees: any[]) => void
+  ) => {
+    let attendeeMap: Record<string, any> = {};
+    let presenceDocs: Record<string, any> = {};
+
+    const emit = () => {
+      const activeThreshold = Date.now() - 65000;
+      const list = Object.values(attendeeMap).map((att: any) => {
+        const presence = presenceDocs[att.voter_id || att.id];
+        const lastSeenTs = presence?.last_seen_ts || 
+          (presence?.last_seen?.toMillis ? presence.last_seen.toMillis() : 
+          (att.last_seen?.toMillis ? att.last_seen.toMillis() : 
+          (att.logged_in_at?.toMillis ? att.logged_in_at.toMillis() : 0)));
+        
+        const isLive = lastSeenTs >= activeThreshold;
+        return {
+          ...att,
+          is_live: isLive,
+          last_active_ts: lastSeenTs
+        };
+      });
+
+      // Sort by last_active_ts desc (most recent activity first)
+      list.sort((a, b) => (b.last_active_ts || 0) - (a.last_active_ts || 0));
+      onUpdate(list);
+    };
+
+    const unsubAttendees = onSnapshot(collection(db, 'events', eventId, 'attendees'), (snap) => {
+      attendeeMap = {};
+      snap.docs.forEach(d => {
+        attendeeMap[d.id] = { id: d.id, ...d.data() };
+      });
+      emit();
+    });
+
+    const unsubPresence = onSnapshot(collection(db, 'events', eventId, 'presence'), (snap) => {
+      presenceDocs = {};
+      snap.docs.forEach(d => {
+        presenceDocs[d.id] = d.data();
+      });
+      emit();
+    });
+
+    const intervalId = setInterval(emit, 5000);
+
+    return () => {
+      unsubAttendees();
+      unsubPresence();
+      clearInterval(intervalId);
+    };
+  },
+
+  /**
+   * Clear all attendees and presence records for an event (e.g. before live conference)
+   */
+  clearAllAttendees: async (eventId: string) => {
+    const attendeesSnap = await getDocs(collection(db, 'events', eventId, 'attendees'));
+    const presenceSnap = await getDocs(collection(db, 'events', eventId, 'presence'));
+    
+    const batch = writeBatch(db);
+    attendeesSnap.docs.forEach(d => batch.delete(d.ref));
+    presenceSnap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
   }
 };
 

@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.7.6 (교단 공식 명칭 완벽 통일: 대의원 ➔ 총대)';
+export const APP_VERSION = 'v2.7.7 (총대 접속자 상세 리스트 모달 팝업 및 기기별 접속 현황 & 기록 초기화 기능)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {
