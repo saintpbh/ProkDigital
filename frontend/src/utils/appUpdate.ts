@@ -4,7 +4,7 @@
  * Eliminates the need to uninstall/reinstall the PWA on iOS and Android.
  */
 
-export const APP_VERSION = 'v2.5.0 (스마트 이어보기 & 퀵 점프)';
+export const APP_VERSION = 'v2.5.1 (iOS 터치스크롤 & 줌 수정)';
 
 export async function forceUpdateApp(): Promise<void> {
   try {

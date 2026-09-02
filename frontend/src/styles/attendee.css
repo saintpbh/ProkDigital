@@ -927,26 +927,31 @@
   height: 100%;
   background: #1e293b;
   position: relative;
-  overflow: hidden;
+  /* CRITICAL: Do NOT use overflow:hidden here — it blocks iOS touch scroll */
+  overflow: visible;
 }
 .fast-pdf-viewer.is-modal {
   position: fixed;
   inset: 0;
   z-index: var(--z-overlay);
   animation: fadeIn 0.15s ease-out;
+  /* iOS: fixed modal must clip at edges */
+  overflow: hidden;
 }
 .fast-pdf-viewer.is-split {
   height: 100%;
+  overflow: hidden;
 }
 .fast-pdf-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
   background: #0f172a;
   color: #ffffff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  gap: 8px;
+  gap: 6px;
   z-index: 10;
   flex-shrink: 0;
 }
@@ -997,15 +1002,25 @@
   background: transparent;
   border: none;
   color: #ffffff;
-  padding: 5px 8px;
-  font-size: 10px;
+  min-width: 40px;
+  min-height: 36px;
+  padding: 5px 10px;
+  font-size: 12px;
   cursor: pointer;
   border-radius: var(--radius-md);
   transition: all 0.15s ease;
   line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .btn-page-step:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.2);
+}
+.btn-page-step:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(0.9);
 }
 .btn-page-step:disabled {
   opacity: 0.3;
@@ -1015,15 +1030,20 @@
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ffffff;
-  padding: 4px 8px;
+  padding: 6px 10px;
+  min-height: 36px;
   border-radius: var(--radius-md);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 2px;
   transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .btn-page-indicator:hover {
   background: rgba(37, 99, 235, 0.4);
@@ -1046,12 +1066,16 @@
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .btn-tool {
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   border: none;
-  padding: 6px 10px;
+  /* iOS: minimum 44px touch target per Apple HIG */
+  min-width: 44px;
+  min-height: 36px;
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   font-size: 12px;
   font-weight: 700;
@@ -1060,10 +1084,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .btn-tool:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
+}
+.btn-tool:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(0.95);
 }
 .btn-tool:disabled {
   opacity: 0.35;
@@ -1086,13 +1118,14 @@
 .btn-tool-browser {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
-  padding: 6px 12px;
+  padding: 8px 14px;
 }
 .btn-tool-close {
   background: rgba(239, 68, 68, 0.25) !important;
   color: #fca5a5 !important;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   padding: 0;
   font-size: 14px;
   border-radius: 50%;
@@ -1256,16 +1289,19 @@
 }
 
 .fast-pdf-body {
-  flex: 1;
+  flex: 1 1 0%;         /* iOS flex: explicit basis 0 to allow shrinking */
+  min-height: 0;        /* CRITICAL: iOS flex scroll fix — allows overflow inside flex child */
   width: 100%;
-  height: 100%;
   overflow-y: auto;
   overflow-x: auto;
   background: #334155;
   position: relative;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+  overscroll-behavior: contain;      /* Prevent scroll chaining to parent */
   padding: 16px 8px 32px;
   box-sizing: border-box;
+  /* Allow vertical pan/scroll (iOS), do NOT block touch */
+  touch-action: pan-x pan-y;
 }
 .fast-pdf-skeleton-loader {
   position: absolute;
@@ -1298,6 +1334,8 @@
   width: 100%;
   min-width: 100%;
   box-sizing: border-box;
+  /* Ensure container itself doesn't block touch */
+  touch-action: pan-x pan-y;
 }
 .pdf-page-card {
   background: #ffffff;
@@ -1308,11 +1346,16 @@
   margin: 0 auto;
   box-sizing: border-box;
   transition: width 0.15s ease-out;
+  /* Canvas touch passthrough — allow scroll over canvas */
+  touch-action: pan-y pinch-zoom;
 }
 .pdf-page-canvas {
   display: block;
   width: 100% !important;
   height: auto !important;
+  /* CRITICAL iOS fix: canvas must allow touch scroll-through */
+  touch-action: pan-y pinch-zoom;
+  pointer-events: none;  /* Let parent handle all touch — canvas is display-only */
 }
 .page-number-tag {
   position: absolute;
