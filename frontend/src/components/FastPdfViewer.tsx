@@ -420,7 +420,8 @@ export const FastPdfViewer: React.FC<FastPdfViewerProps> = ({
 };
 
 /**
- * High-DPI Page Canvas Component with Auto-Fit Width
+ * High-DPI Page Canvas Component with IntersectionObserver Virtualization
+ * Eliminates iOS Safari canvas memory exhaustion by only rendering pages near the viewport
  */
 const PdfPageCanvas: React.FC<{
   pdfDoc: any;
@@ -429,34 +430,59 @@ const PdfPageCanvas: React.FC<{
   originalWidth: number;
   originalHeight: number;
 }> = ({ pdfDoc, pageNumber, targetWidth, originalWidth, originalHeight }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(pageNumber <= 2);
   const [isRendered, setIsRendered] = useState(false);
 
   // Aspect ratio preserved height
   const scaleRatio = targetWidth / originalWidth;
   const targetHeight = originalHeight * scaleRatio;
 
+  // 1. Lazy load: Only activate rendering when card is near the viewport
+  useEffect(() => {
+    if (isVisible) return;
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '500px 0px' } // Pre-render 500px before scrolling into view
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  // 2. Render PDF Page to Canvas only when visible
   useEffect(() => {
     let isCancelled = false;
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!isVisible || !pdfDoc || !canvasRef.current) return;
 
     pdfDoc.getPage(pageNumber).then((page: any) => {
       if (isCancelled) return;
       
-      const renderScale = scaleRatio;
-      const viewport = page.getViewport({ scale: renderScale });
+      const viewport = page.getViewport({ scale: scaleRatio });
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const context = canvas.getContext('2d');
       if (!context) return;
 
-      // High DPI display sharpness (Retina / 2x / 3x)
-      const outputScale = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x for speed & memory
+      // High DPI display sharpness (Retina 2x cap for fast rendering & low memory)
+      const outputScale = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(viewport.width * outputScale);
       canvas.height = Math.floor(viewport.height * outputScale);
-      canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
 
       const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
 
@@ -469,23 +495,36 @@ const PdfPageCanvas: React.FC<{
       page.render(renderContext).promise.then(() => {
         if (!isCancelled) setIsRendered(true);
       }).catch(() => {
-        // Ignore rendering cancellation
+        // Ignore render cancellation
       });
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [pdfDoc, pageNumber, scaleRatio]);
+  }, [isVisible, pdfDoc, pageNumber, scaleRatio]);
 
   return (
     <div 
+      ref={cardRef}
       id={`pdf-page-card-${pageNumber}`}
       className={`pdf-page-card ${isRendered ? 'is-ready' : 'is-loading'}`}
-      style={{ width: `${Math.floor(targetWidth)}px`, maxWidth: '100%', minHeight: `${Math.floor(targetHeight)}px` }}
+      style={{ 
+        width: `${Math.floor(targetWidth)}px`, 
+        maxWidth: '100%', 
+        height: `${Math.floor(targetHeight)}px`,
+        position: 'relative'
+      }}
     >
-      <canvas ref={canvasRef} className="pdf-page-canvas" />
+      {isVisible ? (
+        <canvas ref={canvasRef} className="pdf-page-canvas" />
+      ) : (
+        <div className="pdf-page-placeholder">
+          <span className="page-loading-hint">{pageNumber}p 준비 중...</span>
+        </div>
+      )}
       <span className="page-number-tag">{pageNumber}</span>
     </div>
   );
 };
+
